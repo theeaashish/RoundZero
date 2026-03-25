@@ -1,11 +1,13 @@
 import { ORPCError } from "@orpc/client";
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { architectureCanvasSchema } from "@/lib/architecture-types";
 import db from "@/lib/prisma";
 import type { Context } from "@/server/orpc";
 
 export const submitAttemptInput = z.object({
   problemId: z.string(),
-  architectureJson: z.any(),
+  architectureJson: architectureCanvasSchema,
   aiFeedback: z.any().optional(),
   score: z.number().optional(),
 });
@@ -21,6 +23,9 @@ export async function submitAttempt({
   if (!user) throw new ORPCError("UNAUTHORIZED");
 
   try {
+    const architectureJson =
+      input.architectureJson as unknown as Prisma.InputJsonValue;
+
     const existing = await db.systemDesignAttempt.findFirst({
       where: { problemId: input.problemId, userId: user.id },
       orderBy: { createdAt: "desc" },
@@ -30,7 +35,7 @@ export async function submitAttempt({
       return await db.systemDesignAttempt.update({
         where: { id: existing.id },
         data: {
-          architectureJson: input.architectureJson ?? existing.architectureJson,
+          architectureJson: architectureJson ?? existing.architectureJson,
           aiFeedback: input.aiFeedback ?? existing.aiFeedback,
           score: input.score ?? existing.score,
         },
@@ -41,8 +46,8 @@ export async function submitAttempt({
       data: {
         problemId: input.problemId,
         userId: user.id,
-        architectureJson: input.architectureJson ?? {},
-        aiFeedback: input.aiFeedback ?? {},
+        architectureJson,
+        aiFeedback: input.aiFeedback,
         score: input.score,
       },
     });

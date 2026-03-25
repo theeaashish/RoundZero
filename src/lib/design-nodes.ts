@@ -50,6 +50,7 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
+import type { ArchitectureNodeData } from "@/lib/architecture-types";
 
 export type NodeCategory =
   | "clients"
@@ -796,6 +797,87 @@ export const DESIGN_NODES: DesignNode[] = [
     description: "CDN analytics service",
   },
 ];
+
+export const DESIGN_NODE_BY_TYPE = new Map(
+  DESIGN_NODES.map((node) => [node.type, node]),
+);
+
+const DEFAULT_DEPLOYMENT_TIER_BY_CATEGORY: Record<
+  NodeCategory,
+  ArchitectureNodeData["deploymentTier"]
+> = {
+  clients: "EDGE",
+  compute: "REGIONAL",
+  databases: "MULTI_REGION",
+  caching: "REGIONAL",
+  storage: "MULTI_REGION",
+  networking: "MULTI_REGION",
+  messaging: "REGIONAL",
+  queue: "REGIONAL",
+  security: "REGIONAL",
+  monitoring: "MULTI_REGION",
+  analytics: "REGIONAL",
+  external: "MULTI_REGION",
+};
+
+const DEFAULT_CRITICALITY_BY_CATEGORY: Record<
+  NodeCategory,
+  ArchitectureNodeData["criticality"]
+> = {
+  clients: "MEDIUM",
+  compute: "HIGH",
+  databases: "HIGH",
+  caching: "MEDIUM",
+  storage: "HIGH",
+  networking: "HIGH",
+  messaging: "MEDIUM",
+  queue: "MEDIUM",
+  security: "HIGH",
+  monitoring: "MEDIUM",
+  analytics: "LOW",
+  external: "MEDIUM",
+};
+
+export function getDesignNodeByType(type: string) {
+  return DESIGN_NODE_BY_TYPE.get(type);
+}
+
+export function buildArchitectureNodeData(type: string): ArchitectureNodeData {
+  const template = getDesignNodeByType(type);
+
+  if (!template) {
+    return {
+      label: "Custom Component",
+      type,
+      details: "Custom service",
+      description: "User-defined system component",
+      category: "compute",
+      technology: "",
+      deploymentTier: "REGIONAL",
+      instances: 1,
+      capacity: "",
+      notes: "",
+      criticality: "MEDIUM",
+    };
+  }
+
+  return {
+    label: template.label,
+    type: template.type,
+    details: template.details,
+    description: template.description,
+    category: template.category,
+    technology: "",
+    deploymentTier: DEFAULT_DEPLOYMENT_TIER_BY_CATEGORY[template.category],
+    instances:
+      template.category === "compute" || template.category === "networking"
+        ? 2
+        : 1,
+    capacity: "",
+    notes: "",
+    criticality: DEFAULT_CRITICALITY_BY_CATEGORY[template.category],
+  };
+}
 
 export const CUSTOM_NODES = {
   systemNode: "systemNode",

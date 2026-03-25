@@ -8,6 +8,10 @@ import {
 } from "ai";
 import { z } from "zod";
 import { env } from "@/config/env";
+import {
+  type ArchitectureEvaluation,
+  architectureEvaluationSchema,
+} from "./architecture-evaluation";
 
 // Initialize Google AI client
 const google = createGoogleGenerativeAI({
@@ -99,47 +103,90 @@ export const generateReport = async (
 };
 
 import {
+  type EvaluationRubric,
   type GeneratedSystemDesignProblem,
+  type ProblemGenerationInput,
+  type ScaleProfile,
   systemDesignProblemSchema,
 } from "./validations/practice";
 
-export const architectureEvaluationSchema = z.object({
-  overallScore: z.number().min(0).max(100),
-  categoryScores: z.object({
-    scalability: z.number().min(0).max(100),
-    reliability: z.number().min(0).max(100),
-    availability: z.number().min(0).max(100),
-    performance: z.number().min(0).max(100),
-    security: z.number().min(0).max(100),
-    maintainability: z.number().min(0).max(100),
-    costOptimization: z.number().min(0).max(100),
-  }),
-  strengths: z.array(z.string()).min(1).max(5),
-  bottlenecks: z.array(z.string()).min(1).max(5),
-  suggestions: z.array(z.string()).min(1).max(5),
-  summary: z.string().min(1),
-});
+function formatList(title: string, values?: string[]) {
+  if (!values?.length) return "";
+  return `## ${title}
+${values.map((value, index) => `${index + 1}. ${value}`).join("\n")}
+`;
+}
 
-export type ArchitectureEvaluation = z.infer<
-  typeof architectureEvaluationSchema
->;
+function formatScaleProfile(scaleProfile?: ScaleProfile) {
+  if (!scaleProfile) return "";
 
-export type ArchitectureCategoryScores =
-  ArchitectureEvaluation["categoryScores"];
+  return `## Scale Profile
+- Daily Active Users: ${scaleProfile.dailyActiveUsers}
+- Peak Requests Per Second: ${scaleProfile.peakRequestsPerSecond}
+- Read/Write Ratio: ${scaleProfile.readWriteRatio}
+- Average Payload Size: ${scaleProfile.averagePayloadSize}
+- Latency SLO: ${scaleProfile.latencySlo}
+- Availability SLO: ${scaleProfile.availabilitySlo}
+- Data Retention: ${scaleProfile.dataRetention}
+- Primary Regions: ${scaleProfile.primaryRegions.join(", ")}
+- Consistency Model: ${scaleProfile.consistencyModel}
+- Growth Expectation: ${scaleProfile.growthExpectation}
+- Budget: ${scaleProfile.budget}
+- Compliance: ${scaleProfile.compliance.join(", ") || "None"}
+`;
+}
 
-// Generate a structured system design problem based on a topic
+function formatEvaluationRubric(evaluationRubric?: EvaluationRubric) {
+  if (!evaluationRubric) return "";
+
+  return `## Evaluation Rubric
+- Must Have Components: ${evaluationRubric.mustHaveComponents.join("; ")}
+- Bonus Points: ${evaluationRubric.bonusPoints.join("; ")}
+- Red Flags: ${evaluationRubric.redFlags.join("; ")}
+`;
+}
+
+// Generate a structured system design problem based on a detailed brief
 export const generateSystemDesignProblem = async (
-  topic: string,
+  input: ProblemGenerationInput,
   temperature: number = TEMPERATURE.BALANCED,
 ): Promise<GeneratedSystemDesignProblem> => {
-  const systemPrompt = `You are a Staff Engineer at FAANG crafting system design interview questions. 
-  The user will provide a topic. Generate a highly realistic, challenging system design problem spec.
-  Include specific, realistic numbers for scale (e.g., 500M DAU, 10k read QPS).`;
+  const systemPrompt = `You are a Staff+ backend architect creating production-grade system design interview prompts.
+Generate a realistic interview problem that is internally consistent, specific, and solvable in the requested interview duration.
+
+Requirements:
+- Respect the requested domain, seniority, complexity, scale assumptions, and constraints.
+- Use realistic product language and operational numbers.
+- Keep the prompt interview-friendly: clear scope, explicit tradeoffs, and meaningful follow-up questions.
+- Ensure the evaluation rubric aligns with the problem statement.
+- Do not repeat the user's brief verbatim; transform it into a polished company-grade challenge.`;
+
+  const prompt = `# Challenge Configuration
+- Topic: ${input.topic}
+- Domain: ${input.domain}
+- Complexity: ${input.complexity}
+- Interview Role: ${input.interviewRole}
+- Interview Duration: ${input.estimatedDurationMinutes} minutes
+- Product Stage: ${input.productStage}
+- Scenario: ${input.scenario}
+- Functional Focus: ${input.functionalFocus.join("; ")}
+- Non-Functional Focus: ${input.nonFunctionalFocus.join("; ")}
+- Daily Active Users: ${input.dailyActiveUsers}
+- Peak Requests Per Second: ${input.peakRequestsPerSecond}
+- Read/Write Ratio: ${input.readWriteRatio}
+- Latency Target: ${input.latencyTarget}
+- Availability Target: ${input.availabilityTarget}
+- Primary Regions: ${input.primaryRegions.join(", ")}
+- Consistency Model: ${input.consistencyModel}
+- Budget: ${input.budget}
+- Compliance: ${input.compliance.join(", ") || "None"}
+
+Return a structured output matching the schema exactly.`;
 
   const { object } = await generateObject({
     model,
     system: systemPrompt,
-    prompt: `Topic: ${topic}`,
+    prompt,
     schema: systemDesignProblemSchema,
     temperature,
   });
@@ -153,6 +200,17 @@ interface ArchitectureEvaluationInput {
   functionalReqs: string[];
   nonFunctionalReqs: string[];
   complexity: string;
+  domain?: string;
+  interviewRole?: string;
+  companyContext?: string;
+  scenario?: string;
+  inScope?: string[];
+  outOfScope?: string[];
+  architectureConsiderations?: string[];
+  followUps?: string[];
+  scaleProfile?: ScaleProfile;
+  evaluationRubric?: EvaluationRubric;
+  heuristicWarnings?: string[];
   architectureText: string;
 }
 
@@ -197,6 +255,10 @@ Provide specific, actionable feedback that helps the candidate improve.`;
 ## Description
 ${input.problemDescription}
 
+${input.domain ? `## Domain\n${input.domain}\n` : ""}
+${input.interviewRole ? `## Target Role\n${input.interviewRole}\n` : ""}
+${input.companyContext ? `## Company Context\n${input.companyContext}\n` : ""}
+${input.scenario ? `## Scenario\n${input.scenario}\n` : ""}
 ## Functional Requirements
 ${input.functionalReqs.map((r, i) => `${i + 1}. ${r}`).join("\n")}
 
@@ -206,6 +268,13 @@ ${input.nonFunctionalReqs.map((r, i) => `${i + 1}. ${r}`).join("\n")}
 ## Complexity Level
 ${input.complexity}
 
+${formatList("In Scope", input.inScope)}
+${formatList("Out of Scope", input.outOfScope)}
+${formatList("Architecture Considerations", input.architectureConsiderations)}
+${formatList("Follow-Up Scenarios", input.followUps)}
+${formatScaleProfile(input.scaleProfile)}
+${formatEvaluationRubric(input.evaluationRubric)}
+${formatList("Heuristic Warnings", input.heuristicWarnings)}
 # Candidate's Architecture
 ${input.architectureText}
 

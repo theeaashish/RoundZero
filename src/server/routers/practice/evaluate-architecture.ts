@@ -1,18 +1,24 @@
 import { ORPCError } from "@orpc/client";
-import type { Edge, Node } from "@xyflow/react";
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import {
   formatArchitectureForLLM,
   serializeArchitecture,
+  summarizeArchitectureHeuristics,
 } from "@/lib/architecture-serializer";
+import { architectureCanvasSchema } from "@/lib/architecture-types";
 import { generateArchitectureEvaluation } from "@/lib/gemini";
 import db from "@/lib/prisma";
+import {
+  evaluationRubricSchema,
+  storedSystemDesignSpecSchema,
+} from "@/lib/validations/practice";
 import type { Context } from "@/server/orpc";
 
 export const evaluateArchitectureInput = z.object({
   problemId: z.string(),
-  nodes: z.array(z.any()),
-  edges: z.array(z.any()),
+  nodes: architectureCanvasSchema.shape.nodes,
+  edges: architectureCanvasSchema.shape.edges,
 });
 
 export type EvaluateArchitectureInput = z.infer<
@@ -40,12 +46,17 @@ export async function evaluateArchitecture({
 
   // Serialize the architecture graph into an LLM-readable format
   let architectureText: string;
+  let heuristicWarnings: string[] = [];
+  let architecturePayload: Prisma.InputJsonValue | undefined;
   try {
-    const serialization = serializeArchitecture(
-      nodes as Node[],
-      edges as Edge[],
-    );
+    const canvas = architectureCanvasSchema.parse({ nodes, edges });
+    const serialization = serializeArchitecture(canvas.nodes, canvas.edges);
     architectureText = formatArchitectureForLLM(serialization);
+    heuristicWarnings = summarizeArchitectureHeuristics(
+      serialization,
+      problem.complexity,
+    ).warnings;
+    architecturePayload = canvas as unknown as Prisma.InputJsonValue;
   } catch (error) {
     console.error("Serialization failed:", error);
     throw new ORPCError("BAD_REQUEST", {
@@ -54,6 +65,11 @@ export async function evaluateArchitecture({
     });
   }
 
+  const spec = storedSystemDesignSpecSchema.safeParse(problem.specJson);
+  const evaluationRubric = evaluationRubricSchema.safeParse(
+    problem.evaluationJson,
+  );
+
   // Generate AI evaluation
   const evaluation = await generateArchitectureEvaluation({
     problemTitle: problem.title,
@@ -61,20 +77,39 @@ export async function evaluateArchitecture({
     functionalReqs: problem.functionalReqs,
     nonFunctionalReqs: problem.nonFunctionalReqs,
     complexity: problem.complexity,
+    domain: problem.domain,
+    interviewRole: problem.interviewRole,
+    companyContext: spec.success ? spec.data.companyContext : undefined,
+    scenario: spec.success ? spec.data.scenario : undefined,
+    inScope: spec.success ? spec.data.inScope : undefined,
+    outOfScope: spec.success ? spec.data.outOfScope : undefined,
+    architectureConsiderations: spec.success
+      ? spec.data.architectureConsiderations
+      : undefined,
+    followUps: spec.success ? spec.data.followUps : undefined,
+    scaleProfile: spec.success ? spec.data.scaleProfile : undefined,
+    evaluationRubric: evaluationRubric.success
+      ? evaluationRubric.data
+      : undefined,
+    heuristicWarnings,
     architectureText,
   });
 
   // Persist the attempt with AI feedback
+  let savedToDatabase = false;
+
   try {
     await db.systemDesignAttempt.create({
       data: {
         problemId,
         userId: user.id,
-        architectureJson: { nodes, edges },
+        architectureJson:
+          architecturePayload ?? ({ nodes, edges } as Prisma.InputJsonValue),
         aiFeedback: evaluation,
         score: evaluation.overallScore,
       },
     });
+    savedToDatabase = true;
   } catch (error) {
     console.error("Failed to save evaluation attempt:", error);
     // Still return the evaluation even if the DB write fails
@@ -82,6 +117,6 @@ export async function evaluateArchitecture({
 
   return {
     ...evaluation,
-    savedToDatabase: true,
+    savedToDatabase,
   };
 }

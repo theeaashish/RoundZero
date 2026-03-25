@@ -22,6 +22,7 @@ export async function getProblems({
                 {
                   description: { contains: input.search, mode: "insensitive" },
                 },
+                { domain: { contains: input.search, mode: "insensitive" } },
               ],
             }
           : {},

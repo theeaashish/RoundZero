@@ -1,11 +1,10 @@
 import { ORPCError } from "@orpc/client";
-import { z } from "zod";
+import type { z } from "zod";
 import { generateSystemDesignProblem } from "@/lib/gemini";
+import { problemGenerationInputSchema } from "@/lib/validations/practice";
 import type { Context } from "@/server/orpc";
 
-export const generateProblemInput = z.object({
-  topic: z.string().min(3).max(100),
-});
+export const generateProblemInput = problemGenerationInputSchema;
 
 export async function generateProblem({
   input,
@@ -18,7 +17,7 @@ export async function generateProblem({
   if (!user) throw new ORPCError("UNAUTHORIZED");
 
   try {
-    const generatedProblem = await generateSystemDesignProblem(input.topic);
+    const generatedProblem = await generateSystemDesignProblem(input);
     return generatedProblem;
   } catch (error) {
     console.error("AI Generation Failed:", error);

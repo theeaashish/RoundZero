@@ -16,9 +16,31 @@ export async function createProblem({
   const { user } = context;
   if (!user) throw new ORPCError("UNAUTHORIZED");
 
+  const {
+    companyContext,
+    scenario,
+    inScope,
+    outOfScope,
+    architectureConsiderations,
+    followUps,
+    scaleProfile,
+    evaluationRubric,
+    ...problemData
+  } = input;
+
   const problem = await db.systemDesignProblem.create({
     data: {
-      ...input,
+      ...problemData,
+      specJson: {
+        companyContext,
+        scenario,
+        inScope,
+        outOfScope,
+        architectureConsiderations,
+        followUps,
+        scaleProfile,
+      },
+      evaluationJson: evaluationRubric,
       createdBy: user.id,
     },
   });

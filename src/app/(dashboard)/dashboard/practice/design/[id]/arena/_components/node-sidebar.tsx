@@ -19,7 +19,7 @@ export function NodeSidebar() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const onDragStart = (
-    event: React.DragEvent<HTMLDivElement>,
+    event: React.DragEvent<HTMLButtonElement>,
     nodeType: string,
     label: string,
     details?: string,
@@ -51,7 +51,8 @@ export function NodeSidebar() {
           Components
         </h2>
         <p className="text-xs text-muted-foreground leading-relaxed font-medium">
-          Drag and drop components to build your architecture.
+          Drag components into the canvas, then use the inspector to add
+          technology, capacity, and flow details.
         </p>
 
         {/* Search input */}
@@ -84,6 +85,7 @@ export function NodeSidebar() {
                 <div key={category.id} className="space-y-3">
                   {/* Clickable category header */}
                   <button
+                    type="button"
                     onClick={() => toggle(category.id)}
                     className="flex items-center gap-2.5 px-2 w-full group/cat cursor-pointer"
                   >
@@ -111,8 +113,9 @@ export function NodeSidebar() {
                         const Icon = node.icon;
 
                         return (
-                          <div
+                          <button
                             key={node.type}
+                            type="button"
                             className={cn(
                               "group relative flex cursor-grab flex-col items-center justify-center gap-3",
                               "rounded-2xl border border-border/50 bg-background/40 p-4 text-center transition-all duration-300",
@@ -146,7 +149,7 @@ export function NodeSidebar() {
 
                             {/* Hover subtle glow */}
                             <div className="absolute inset-0 -z-10 bg-primary/5 opacity-0 blur-2xl transition-opacity group-hover:opacity-100 rounded-2xl" />
-                          </div>
+                          </button>
                         );
                       })}
                     </div>

@@ -1,14 +1,11 @@
 "use client";
 
 import { Handle, type Node, type NodeProps, Position } from "@xyflow/react";
+import type { ArchitectureNodeData } from "@/lib/architecture-types";
 import { DESIGN_NODES, NODE_CATEGORIES } from "@/lib/design-nodes";
 import { cn } from "@/lib/utils";
 
-export type SystemNodeData = {
-  label: string;
-  type: string;
-  details?: string;
-};
+export type SystemNodeData = ArchitectureNodeData;
 
 type CustomNode = Node<SystemNodeData, "systemNode">;
 
@@ -173,11 +170,14 @@ export function SystemNode({ data, selected }: NodeProps<CustomNode>) {
         <div className="text-[13px] font-semibold tracking-tight leading-tight truncate">
           {data.label}
         </div>
-        {data.details ? (
+        {data.technology || data.details ? (
           <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5 truncate">
-            {data.details}
+            {data.technology || data.details}
           </div>
         ) : null}
+        <div className="mt-1 text-[9px] uppercase tracking-[0.18em] text-muted-foreground/70">
+          {data.instances}x {data.deploymentTier.replaceAll("_", " ")}
+        </div>
       </div>
     </div>
   );

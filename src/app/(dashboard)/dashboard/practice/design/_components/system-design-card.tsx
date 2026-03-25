@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Clock, Layers, Server } from "lucide-react";
+import { ArrowRight, Clock, Layers, Server, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,19 @@ interface SystemDesignCardProps {
     complexity: string;
     functionalReqs: string[];
     nonFunctionalReqs: string[];
+    domain: string;
+    interviewRole: string;
+    estimatedDurationMinutes: number;
+    tags: string[];
   };
+}
+
+function labelize(value: string) {
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 export function SystemDesignCard({ problem }: SystemDesignCardProps) {
@@ -54,48 +66,69 @@ export function SystemDesignCard({ problem }: SystemDesignCardProps) {
     complexityConfig.MEDIUM;
 
   return (
-    <Card className="group flex h-full flex-col overflow-hidden transition-all duration-200 hover:border-primary/30 hover:shadow-md bg-card">
+    <Card className="group flex h-full flex-col overflow-hidden bg-card transition-all duration-200 hover:border-primary/30 hover:shadow-md">
       <CardHeader className="space-y-4 pb-4">
-        <div className="flex items-center justify-between">
-          <Badge
-            variant="secondary"
-            className={cn(
-              "font-medium transition-colors border-transparent",
-              currentComplexity.badge,
-            )}
-          >
-            <span
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            <Badge
+              variant="secondary"
               className={cn(
-                "mr-1.5 h-1.5 w-1.5 rounded-full",
-                currentComplexity.dot,
+                "border-transparent font-medium transition-colors",
+                currentComplexity.badge,
               )}
-            />
-            {currentComplexity.label}
-          </Badge>
+            >
+              <span
+                className={cn(
+                  "mr-1.5 h-1.5 w-1.5 rounded-full",
+                  currentComplexity.dot,
+                )}
+              />
+              {currentComplexity.label}
+            </Badge>
+            <Badge variant="outline">{labelize(problem.domain)}</Badge>
+            <Badge variant="outline">{labelize(problem.interviewRole)}</Badge>
+          </div>
+
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary/50 text-muted-foreground">
             <Server className="h-3.5 w-3.5" />
           </div>
         </div>
 
-        <CardTitle className="text-xl leading-tight line-clamp-2 group-hover:text-primary transition-colors">
+        <CardTitle className="line-clamp-2 text-xl leading-tight transition-colors group-hover:text-primary">
           {problem.title}
         </CardTitle>
       </CardHeader>
 
-      <CardContent className="flex-1 space-y-6 pb-6">
-        <CardDescription className="text-sm leading-relaxed line-clamp-3">
+      <CardContent className="flex-1 space-y-5 pb-6">
+        <CardDescription className="line-clamp-3 text-sm leading-relaxed">
           {problem.description}
         </CardDescription>
 
-        {/* Clean, horizontal metadata row */}
-        <div className="flex items-center gap-4 text-sm font-medium text-muted-foreground">
+        <div className="flex flex-wrap gap-2">
+          {problem.tags.slice(0, 3).map((tag) => (
+            <Badge key={tag} variant="outline" className="text-xs">
+              {tag}
+            </Badge>
+          ))}
+          {problem.tags.length > 3 ? (
+            <Badge variant="outline" className="text-xs">
+              +{problem.tags.length - 3} more
+            </Badge>
+          ) : null}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4 text-sm font-medium text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <Layers className="h-4 w-4" />
             <span>{totalSpecs} Specs</span>
           </div>
           <div className="flex items-center gap-1.5">
             <Clock className="h-4 w-4" />
-            <span>45m</span>
+            <span>{problem.estimatedDurationMinutes}m</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="h-4 w-4" />
+            <span>{labelize(problem.interviewRole)}</span>
           </div>
         </div>
       </CardContent>
@@ -104,11 +137,11 @@ export function SystemDesignCard({ problem }: SystemDesignCardProps) {
         <Button
           asChild
           variant="outline"
-          className="w-full group/btn border-border/50 hover:border-primary/50 hover:bg-primary/5 transition-all"
+          className="w-full border-border/50 transition-all hover:border-primary/50 hover:bg-primary/5"
         >
           <Link href={`/dashboard/practice/design/${problem.id}`}>
             Review Challenge
-            <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover/btn:translate-x-1" />
+            <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
           </Link>
         </Button>
       </CardFooter>

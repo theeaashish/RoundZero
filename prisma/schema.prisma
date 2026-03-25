@@ -166,6 +166,12 @@ model SystemDesignProblem {
   functionalReqs    String[]
   nonFunctionalReqs String[]
   complexity        String                @default("MEDIUM")
+  domain            String                @default("DATA")
+  interviewRole     String                @default("SENIOR")
+  estimatedDurationMinutes Int            @default(45)
+  tags              String[]              @default([])
+  specJson          Json
+  evaluationJson    Json?
   createdBy         String?
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
