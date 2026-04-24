@@ -1,8 +1,9 @@
 "use client";
 
-import { Clock } from "lucide-react";
+import { ArrowRight, Clock } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export interface PracticeItem {
@@ -24,33 +25,6 @@ const difficultyConfig = {
   Medium: "text-amber-500 bg-amber-500/10",
   Hard: "text-red-500 bg-red-500/10",
 };
-
-const defaultItems: PracticeItem[] = [
-  {
-    id: 1,
-    title: "Two Sum Problem",
-    category: "Arrays",
-    difficulty: "Easy",
-    estimatedTime: "15 min",
-    href: "/dashboard/practice/coding/two-sum",
-  },
-  {
-    id: 2,
-    title: "Design Twitter Feed",
-    category: "System Design",
-    difficulty: "Hard",
-    estimatedTime: "45 min",
-    href: "/dashboard/practice/design/twitter-feed",
-  },
-  {
-    id: 3,
-    title: "Tell me about a conflict",
-    category: "Behavioral",
-    difficulty: "Medium",
-    estimatedTime: "10 min",
-    href: "/dashboard/practice/behavioral/conflict",
-  },
-];
 
 function PracticeItemCard({ item }: { item: PracticeItem }) {
   const content = (
@@ -102,17 +76,29 @@ function LoadingSkeleton() {
 }
 
 export function RecommendedPractice({
-  items = defaultItems,
+  items = [],
   isLoading,
 }: RecommendedPracticeProps) {
   return (
     <Card className="border-border/50">
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Recommended for You</CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-base">Recommended for You</CardTitle>
+          <Button asChild variant="ghost" size="sm" className="h-8 px-2">
+            <Link href="/dashboard/practice/design">
+              View More
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {isLoading ? (
           <LoadingSkeleton />
+        ) : items.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border/50 p-3 text-sm text-muted-foreground">
+            No system design recommendations yet.
+          </div>
         ) : (
           items.map((item) => <PracticeItemCard key={item.id} item={item} />)
         )}

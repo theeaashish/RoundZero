@@ -1,34 +1,23 @@
 import "server-only";
 
-import type { RouterClient } from "@orpc/server";
 import { createRouterClient } from "@orpc/server";
 import { os_context } from "@/server/orpc";
 import { appRouter } from "@/server/routers/app";
 
-declare global {
-  var $client: RouterClient<typeof appRouter> | undefined;
-}
-
 /**
  * Initialize the server-side oRPC client.
- * This is shared across all requests for better SSR performance.
- * The context function is called per-request to provide fresh headers.
+ * A fresh client avoids stale router method shapes during dev HMR.
+ * The context function is still called per-request for fresh headers.
  */
 export function initializeServerClient() {
-  if (!globalThis.$client) {
-    globalThis.$client = createRouterClient(appRouter, {
-      context: async () => {
-        // Headers will be provided per-request via Next.js
-        const { headers } = await import("next/headers");
-        return os_context({ headers: await headers() });
-      },
-    });
-  }
-  return globalThis.$client;
+  return createRouterClient(appRouter, {
+    context: async () => {
+      // Headers will be provided per-request via Next.js
+      const { headers } = await import("next/headers");
+      return os_context({ headers: await headers() });
+    },
+  });
 }
 
-// Initialize immediately
-initializeServerClient();
-
 // Export the client for direct use
-export const serverClient = globalThis.$client!;
+export const serverClient = initializeServerClient();

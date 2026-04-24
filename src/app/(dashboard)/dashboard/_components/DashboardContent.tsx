@@ -51,6 +51,24 @@ const mapInterviewStatus = (status: string) => {
   }
 };
 
+const mapComplexity = (complexity: string) => {
+  switch (complexity) {
+    case "EASY":
+      return "Easy";
+    case "HARD":
+      return "Hard";
+    default:
+      return "Medium";
+  }
+};
+
+const labelize = (value: string) =>
+  value
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
 export default function DashboardContent({ user }: DashboardContentProps) {
   // Stats query
   const { data: statsData, isLoading: isStatsLoading } = useQuery(
@@ -72,6 +90,13 @@ export default function DashboardContent({ user }: DashboardContentProps) {
     orpc.interview.skillProgress.queryOptions({
       input: {},
       staleTime: 1000 * 60 * 5, // 5 minutes
+    }),
+  );
+
+  const { data: practiceData, isLoading: isPracticeLoading } = useQuery(
+    orpc.practice.getProblems.queryOptions({
+      input: {},
+      staleTime: 1000 * 60 * 5,
     }),
   );
 
@@ -98,6 +123,22 @@ export default function DashboardContent({ user }: DashboardContentProps) {
     [listData],
   );
 
+  const recommendedPracticeItems = useMemo(
+    () =>
+      (practiceData ?? []).slice(0, 3).map((problem) => ({
+        id: problem.id,
+        title: problem.title,
+        category: labelize(problem.domain),
+        difficulty: mapComplexity(problem.complexity) as
+          | "Easy"
+          | "Medium"
+          | "Hard",
+        estimatedTime: `${problem.estimatedDurationMinutes} min`,
+        href: `/dashboard/practice/design/${problem.id}`,
+      })),
+    [practiceData],
+  );
+
   return (
     <div className="p-6 lg:p-8 space-y-8">
       <WelcomeHeader userName={user.name} />
@@ -120,7 +161,10 @@ export default function DashboardContent({ user }: DashboardContentProps) {
             skills={skillData?.skills}
             isLoading={isSkillLoading}
           />
-          <RecommendedPractice />
+          <RecommendedPractice
+            items={recommendedPracticeItems}
+            isLoading={isPracticeLoading}
+          />
           <ProTipCard />
         </div>
       </div>

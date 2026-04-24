@@ -9,6 +9,7 @@ import { generateProblem, generateProblemInput } from "./generate-problem";
 import { getAttempt, getAttemptInput } from "./get-attempt";
 import { getProblem } from "./get-problem";
 import { getProblems } from "./get-problems";
+import { listAttempts, listAttemptsInput } from "./list-attempts";
 import { submitAttempt, submitAttemptInput } from "./submit-attempt";
 
 export const practiceRouter = {
@@ -82,6 +83,17 @@ export const practiceRouter = {
     })
     .input(getAttemptInput)
     .handler(getAttempt),
+
+  listAttempts: protectedProcedure
+    .route({
+      description: "List a user's system design attempts",
+      method: "GET",
+      path: "/practice/design/attempts",
+      summary: "List Attempts",
+      tags: ["Practice"],
+    })
+    .input(listAttemptsInput)
+    .handler(listAttempts),
 
   evaluateArchitecture: protectedProcedure
     .route({

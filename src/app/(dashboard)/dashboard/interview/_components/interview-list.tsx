@@ -1,10 +1,11 @@
 "use client";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { CopyPlus, Loader2, Terminal } from "lucide-react";
+import { CopyPlus, Loader2, Search, Terminal } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { orpc } from "@/lib/orpc-client";
 import type {
@@ -27,6 +28,8 @@ export function InterviewList({ initialData }: InterviewListProps) {
   const [statusFilter, setStatusFilter] = useState<InterviewStatus | "ALL">(
     "ALL",
   );
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"LATEST" | "SCORE_DESC">("LATEST");
 
   // Memoize options so they only change when relevant deps change
   const infiniteOptions = useMemo(
@@ -72,6 +75,23 @@ export function InterviewList({ initialData }: InterviewListProps) {
     [data],
   );
 
+  const filteredInterviews = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+    const visible = normalizedSearch
+      ? interviews.filter((interview) =>
+          interview.jobTitle.toLowerCase().includes(normalizedSearch),
+        )
+      : interviews;
+
+    if (sortBy === "SCORE_DESC") {
+      return [...visible].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+    }
+
+    return [...visible].sort(
+      (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
+    );
+  }, [interviews, search, sortBy]);
+
   // Error UI
   if (error) {
     return (
@@ -95,13 +115,44 @@ export function InterviewList({ initialData }: InterviewListProps) {
   return (
     <div className="space-y-8">
       {/* Filter Bar */}
-      <InterviewFilterBar
-        currentStatus={statusFilter}
-        onStatusChange={setStatusFilter}
-      />
+      <div className="space-y-4">
+        <InterviewFilterBar
+          currentStatus={statusFilter}
+          onStatusChange={setStatusFilter}
+        />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by role or job title"
+              className="pl-9"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={sortBy === "LATEST" ? "default" : "outline"}
+              onClick={() => setSortBy("LATEST")}
+            >
+              Latest
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={sortBy === "SCORE_DESC" ? "default" : "outline"}
+              onClick={() => setSortBy("SCORE_DESC")}
+            >
+              Score High-Low
+            </Button>
+          </div>
+        </div>
+      </div>
 
       {/* Grid or Empty State */}
-      {interviews.length === 0 && !isLoading ? (
+      {filteredInterviews.length === 0 && !isLoading ? (
         <div className="flex h-[450px] flex-col items-center justify-center gap-6 text-center rounded-2xl border border-dashed p-8 bg-muted/20 animate-in fade-in zoom-in-95 duration-500">
           <div className="p-6 rounded-full bg-primary/10 ring-8 ring-primary/5">
             <CopyPlus className="h-10 w-10 text-primary" />
@@ -111,7 +162,9 @@ export function InterviewList({ initialData }: InterviewListProps) {
               No interviews found
             </h3>
             <p className="text-muted-foreground max-w-md mx-auto">
-              {statusFilter !== "ALL"
+              {search
+                ? `No interviews match "${search}". Try a different keyword.`
+                : statusFilter !== "ALL"
                 ? `You don't have any ${statusFilter
                     .toLowerCase()
                     .replace("_", " ")} interviews.`
@@ -138,7 +191,7 @@ export function InterviewList({ initialData }: InterviewListProps) {
         </div>
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {interviews.map((interview) => (
+          {filteredInterviews.map((interview) => (
             <InterviewCard key={interview.id} interview={interview} />
           ))}
         </div>
