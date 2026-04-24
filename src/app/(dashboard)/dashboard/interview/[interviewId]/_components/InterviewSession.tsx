@@ -25,7 +25,10 @@ export function InterviewSession() {
     endInterview,
     isLoading,
     isEnding,
+    transcript,
     interimTranscript,
+    connectionState,
+    connectSTT,
   } = useInterview();
 
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -63,9 +66,12 @@ export function InterviewSession() {
   useEffect(() => {
     if (
       status === "IN_PROGRESS" &&
+      connectionState === "connected" &&
       !isPlaying &&
       !isResponding &&
       !isRecording &&
+      !transcript.trim() &&
+      !interimTranscript.trim() &&
       messages.length > 0
     ) {
       const timer = setTimeout(() => {
@@ -75,7 +81,16 @@ export function InterviewSession() {
     } else {
       setShowMicReminder(false);
     }
-  }, [status, isPlaying, isResponding, isRecording, messages.length]);
+  }, [
+    status,
+    connectionState,
+    isPlaying,
+    isResponding,
+    isRecording,
+    transcript,
+    interimTranscript,
+    messages.length,
+  ]);
 
   // Hide mic reminder when user starts recording
   useEffect(() => {
@@ -112,6 +127,23 @@ export function InterviewSession() {
   }
 
   const isTechnical = interview.type === "TECHNICAL";
+  const questionsAnswered = messages.filter(
+    (message) => message.role === "user",
+  ).length;
+  const targetQuestionCount =
+    interview.type === "TECHNICAL"
+      ? 5
+      : interview.type === "SYSTEM_DESIGN"
+        ? 4
+        : 4;
+  const currentPhase =
+    questionsAnswered === 0
+      ? "Opening"
+      : questionsAnswered < 2
+        ? "Discovery"
+        : questionsAnswered < targetQuestionCount
+          ? "Deep Dive"
+          : "Wrap Up";
 
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -132,10 +164,12 @@ export function InterviewSession() {
       {/* Stats bar */}
       <div className="flex justify-center py-1.5 border-b bg-muted/30">
         <InterviewStats
-          questionsAnswered={messages.filter((m) => m.role === "user").length}
-          totalQuestions={undefined}
+          questionsAnswered={questionsAnswered}
+          totalQuestions={targetQuestionCount}
           currentTopic={interview.techStack || "General"}
           techStack={interview.techStack ? interview.techStack.split(",") : []}
+          currentPhase={currentPhase}
+          connectionState={connectionState}
         />
       </div>
 
@@ -157,7 +191,10 @@ export function InterviewSession() {
                 isResponding={isResponding}
                 onToggleMic={toggleMic}
                 showMicReminder={showMicReminder}
+                draftTranscript={transcript}
                 interimTranscript={interimTranscript}
+                connectionState={connectionState}
+                onReconnect={() => connectSTT()}
                 className="h-full w-full"
               />
 
@@ -183,12 +220,12 @@ export function InterviewSession() {
                 className="h-full border-0 rounded-none"
                 isExpanded={isEditorExpanded}
                 onToggleExpand={() => setIsEditorExpanded(!isEditorExpanded)}
-                onSubmit={(code, language) =>
-                  sendMessage("Shared a code submission for review.", {
+                onSubmit={async (code, language) => {
+                  await sendMessage("Shared a code submission for review.", {
                     codeSnippet: code,
                     language,
-                  })
-                }
+                  });
+                }}
               />
             </div>
           </>
@@ -202,7 +239,10 @@ export function InterviewSession() {
               isResponding={isResponding}
               onToggleMic={toggleMic}
               showMicReminder={showMicReminder}
+              draftTranscript={transcript}
               interimTranscript={interimTranscript}
+              connectionState={connectionState}
+              onReconnect={() => connectSTT()}
               className="h-full"
             />
 

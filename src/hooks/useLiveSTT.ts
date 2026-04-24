@@ -22,13 +22,14 @@ export interface LiveSTTState {
   isRecording: boolean;
   connect: () => Promise<void>;
   disconnect: () => void;
+  finalizeCurrentUtterance: () => string;
   pauseMic: () => void;
   resumeMic: () => void;
 }
 
 const DEEPGRAM_WSS_BASE = "wss://api.deepgram.com/v1/listen";
-const DEEPGRAM_ENDPOINTING_MS = 900;
-const DEFAULT_UTTERANCE_TIMEOUT_MS = 2200;
+const DEEPGRAM_ENDPOINTING_MS = 700;
+const DEFAULT_UTTERANCE_TIMEOUT_MS = 900;
 
 const DEEPGRAM_PARAMS = new URLSearchParams({
   model: "nova-3",
@@ -44,7 +45,7 @@ const AUDIO_CONSTRAINTS: MediaTrackConstraints = {
   autoGainControl: true,
 };
 
-const RECORDER_TIMESLICE_MS = 250;
+const RECORDER_TIMESLICE_MS = 200;
 
 function getSupportedMimeType(): string {
   const types = [
@@ -75,6 +76,7 @@ export const useLiveSTT = (options: LiveSTTOptions = {}): LiveSTTState => {
   const keepAliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const assembledTranscriptRef = useRef<string>("");
+  const utterancePreviewRef = useRef<string>("");
   const utteranceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -83,14 +85,29 @@ export const useLiveSTT = (options: LiveSTTOptions = {}): LiveSTTState => {
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
-  const triggerUtteranceEnd = useCallback(() => {
-    const assembled = assembledTranscriptRef.current.trim();
+  const finalizeCurrentUtterance = useCallback(() => {
+    if (utteranceTimeoutRef.current) {
+      clearTimeout(utteranceTimeoutRef.current);
+      utteranceTimeoutRef.current = null;
+    }
+
+    const assembled = (
+      utterancePreviewRef.current || assembledTranscriptRef.current
+    ).trim();
+
     if (assembled) {
       optionsRef.current.onUtteranceEnd?.(assembled);
-      assembledTranscriptRef.current = "";
     }
+
+    assembledTranscriptRef.current = "";
+    utterancePreviewRef.current = "";
     isSpeakingRef.current = false;
+    return assembled;
   }, []);
+
+  const triggerUtteranceEnd = useCallback(() => {
+    finalizeCurrentUtterance();
+  }, [finalizeCurrentUtterance]);
 
   const resetUtteranceTimeout = useCallback(() => {
     if (utteranceTimeoutRef.current) {
@@ -98,7 +115,7 @@ export const useLiveSTT = (options: LiveSTTOptions = {}): LiveSTTState => {
     }
     utteranceTimeoutRef.current = setTimeout(() => {
       triggerUtteranceEnd();
-    }, optionsRef.current.utteranceTimeoutMs || DEFAULT_UTTERANCE_TIMEOUT_MS);
+    }, optionsRef.current.utteranceTimeoutMs ?? DEFAULT_UTTERANCE_TIMEOUT_MS);
   }, [triggerUtteranceEnd]);
 
   const cleanup = useCallback(() => {
@@ -135,6 +152,7 @@ export const useLiveSTT = (options: LiveSTTOptions = {}): LiveSTTState => {
     setIsRecording(false);
     isSpeakingRef.current = false;
     assembledTranscriptRef.current = "";
+    utterancePreviewRef.current = "";
   }, []);
 
   const pauseMic = useCallback(() => {
@@ -153,6 +171,7 @@ export const useLiveSTT = (options: LiveSTTOptions = {}): LiveSTTState => {
       });
     }
     assembledTranscriptRef.current = "";
+    utterancePreviewRef.current = "";
     isSpeakingRef.current = false;
     setIsRecording(true);
   }, []);
@@ -204,13 +223,16 @@ export const useLiveSTT = (options: LiveSTTOptions = {}): LiveSTTState => {
               }
 
               if (data.is_final) {
-                assembledTranscriptRef.current += ` ${transcript}`;
+                assembledTranscriptRef.current =
+                  `${assembledTranscriptRef.current} ${transcript}`.trim();
+                utterancePreviewRef.current = assembledTranscriptRef.current;
                 optionsRef.current.onFinalTranscript?.(
-                  assembledTranscriptRef.current.trim(),
+                  utterancePreviewRef.current,
                 );
               } else {
                 const interim =
                   `${assembledTranscriptRef.current} ${transcript}`.trim();
+                utterancePreviewRef.current = interim;
                 optionsRef.current.onInterimTranscript?.(interim);
               }
 
@@ -267,6 +289,7 @@ export const useLiveSTT = (options: LiveSTTOptions = {}): LiveSTTState => {
     isRecording,
     connect,
     disconnect,
+    finalizeCurrentUtterance,
     pauseMic,
     resumeMic,
   };

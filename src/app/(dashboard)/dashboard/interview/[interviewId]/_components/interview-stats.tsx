@@ -9,6 +9,8 @@ interface InterviewStatsProps {
   totalQuestions?: number;
   currentTopic: string;
   techStack: string[];
+  currentPhase: string;
+  connectionState: "disconnected" | "connecting" | "connected" | "failed";
   className?: string;
 }
 
@@ -17,19 +19,26 @@ export function InterviewStats({
   totalQuestions,
   currentTopic,
   techStack,
+  currentPhase,
+  connectionState,
   className,
 }: InterviewStatsProps) {
+  const questionSlots = Array.from(
+    { length: totalQuestions ?? 0 },
+    (_, index) => `question-slot-${index + 1}`,
+  );
+
   return (
     <div className={cn("flex items-center gap-6 text-sm", className)}>
       {/* Progress */}
       {totalQuestions ? (
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
-            {Array.from({ length: totalQuestions }).map((_, i) => (
-              <div key={i}>
-                {i < questionsAnswered ? (
+            {questionSlots.map((slotId, index) => (
+              <div key={slotId}>
+                {index < questionsAnswered ? (
                   <CheckCircle2 className="h-4 w-4 text-green-500" />
-                ) : i === questionsAnswered ? (
+                ) : index === questionsAnswered ? (
                   <HelpCircle className="h-4 w-4 text-primary animate-pulse" />
                 ) : (
                   <Circle className="h-4 w-4 text-muted-foreground/30" />
@@ -61,6 +70,15 @@ export function InterviewStats({
         </Badge>
       </div>
 
+      <div className="h-4 w-px bg-border" />
+
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground">Phase:</span>
+        <Badge variant="secondary" className="font-normal">
+          {currentPhase}
+        </Badge>
+      </div>
+
       {/* Divider */}
       <div className="h-4 w-px bg-border" />
 
@@ -76,6 +94,18 @@ export function InterviewStats({
             +{techStack.length - 3}
           </span>
         )}
+      </div>
+
+      <div className="h-4 w-px bg-border" />
+
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground">Mic:</span>
+        <Badge
+          variant={connectionState === "connected" ? "secondary" : "outline"}
+          className="font-normal"
+        >
+          {connectionState}
+        </Badge>
       </div>
     </div>
   );

@@ -24,6 +24,7 @@ import type { InterviewData, Message } from "./types";
 type InterviewStatus = keyof typeof INTERVIEW_STATUS;
 
 const VALID_ROLES = ["user", "assistant", "system"] as const;
+const AUTO_SUBMIT_IDLE_MS = 2200;
 const interviewMessageMetadataSchema = z.object({
   persistedId: z.string().optional(),
   audioUrl: z.string().nullable().optional(),
@@ -136,13 +137,6 @@ const mergeMessage = (
   );
 };
 
-/** Keep a ref always in sync with the latest value — avoids stale closures. */
-function useLatestRef<T>(value: T) {
-  const ref = useRef(value);
-  ref.current = value;
-  return ref;
-}
-
 interface SendMessageOptions {
   codeSnippet?: string;
   language?: string;
@@ -161,8 +155,9 @@ export interface InterviewContextType {
   isLoading: boolean;
   isEnding: boolean;
   startInterview: () => Promise<void>;
-  sendMessage: (text: string, options?: SendMessageOptions) => Promise<void>;
+  sendMessage: (text: string, options?: SendMessageOptions) => Promise<boolean>;
   endInterview: (durationSec: number) => Promise<void>;
+  connectSTT: () => Promise<void>;
   toggleMic: () => Promise<void>;
   stopAllMedia: () => void;
   transcript: string;
@@ -192,6 +187,7 @@ export const InterviewContextProvider = ({
   const [isHydrated, setIsHydrated] = useState(false);
   const isStartingRef = useRef(false);
   const isSendingRef = useRef(false);
+  const lastAutoSubmittedRef = useRef({ content: "", at: 0 });
 
   // Chat transport
   const chatTransport = useMemo(
@@ -248,28 +244,6 @@ export const InterviewContextProvider = ({
 
   const isResponding = chatStatus === "submitted" || chatStatus === "streaming";
 
-  // Speech end handler (stable identity, reads latest via ref)
-  const sendMessageLatestRef = useRef<
-    (content: string, options?: SendMessageOptions) => Promise<void>
-  >(async () => {});
-
-  const handleSpeechEnd = useCallback(async (finalTranscript: string) => {
-    const trimmed = finalTranscript.trim();
-    if (!trimmed || isSendingRef.current) {
-      return;
-    }
-
-    try {
-      isSendingRef.current = true;
-      await sendMessageLatestRef.current(trimmed);
-    } catch (error) {
-      console.error("[Interview Context] Auto-send error:", error);
-      toast.error("Failed to send your response");
-    } finally {
-      isSendingRef.current = false;
-    }
-  }, []);
-
   // Media hook
   const {
     isPlaying,
@@ -284,7 +258,6 @@ export const InterviewContextProvider = ({
     connectSTT,
     stopAllMedia,
   } = useInterviewMedia({
-    onSpeechEnd: handleSpeechEnd,
     isAssistantResponding: isResponding,
   });
 
@@ -407,25 +380,32 @@ export const InterviewContextProvider = ({
   const sendMessage = useCallback(
     async (content: string, options?: SendMessageOptions) => {
       if (!interviewId || isResponding) {
-        return;
+        return false;
       }
 
-      const previousTranscript = transcript;
+      const trimmedContent = content.trim();
+      if (!trimmedContent) {
+        return false;
+      }
+
+      const previousTranscript = transcript.trim();
       clearTranscript();
 
       try {
         await sendChatMessage({
-          text: content,
+          text: trimmedContent,
           metadata: {
             codeSnippet: options?.codeSnippet ?? null,
             language: options?.language ?? null,
             createdAt: new Date().toISOString(),
           },
         });
+        return true;
       } catch (error) {
         console.error("[Interview Context] Chat error:", error);
         restoreTranscript(previousTranscript);
         toast.error("Failed to send message");
+        return false;
       }
     },
     [
@@ -438,11 +418,57 @@ export const InterviewContextProvider = ({
     ],
   );
 
-  // Keep sendMessage ref in sync for the stable handleSpeechEnd callback
-  const sendMessageRef = useLatestRef(sendMessage);
   useEffect(() => {
-    sendMessageLatestRef.current = sendMessageRef.current;
-  }, [sendMessageRef]);
+    if (status !== "IN_PROGRESS" || isPlaying || isResponding) {
+      return;
+    }
+
+    const draftTranscript = transcript.trim();
+    if (!draftTranscript || interimTranscript.trim()) {
+      return;
+    }
+
+    const isDuplicateAutoSend =
+      lastAutoSubmittedRef.current.content === draftTranscript &&
+      Date.now() - lastAutoSubmittedRef.current.at < 4000;
+
+    if (isDuplicateAutoSend) {
+      return;
+    }
+
+    const autoSubmitTimeout = window.setTimeout(() => {
+      if (isSendingRef.current) {
+        return;
+      }
+
+      isSendingRef.current = true;
+
+      void (async () => {
+        try {
+          const didSend = await sendMessage(draftTranscript);
+          if (didSend) {
+            lastAutoSubmittedRef.current = {
+              content: draftTranscript,
+              at: Date.now(),
+            };
+          }
+        } finally {
+          isSendingRef.current = false;
+        }
+      })();
+    }, AUTO_SUBMIT_IDLE_MS);
+
+    return () => {
+      window.clearTimeout(autoSubmitTimeout);
+    };
+  }, [
+    status,
+    isPlaying,
+    isResponding,
+    transcript,
+    interimTranscript,
+    sendMessage,
+  ]);
 
   const endInterview = useCallback(
     async (durationSec: number) => {
@@ -489,6 +515,7 @@ export const InterviewContextProvider = ({
     startInterview,
     sendMessage,
     endInterview,
+    connectSTT,
     toggleMic,
     stopAllMedia,
     transcript,

@@ -1,6 +1,6 @@
 "use client";
 
-import { Mic } from "lucide-react";
+import { AlertTriangle, Mic, RefreshCw } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { AIAvatar } from "./ai-avatar";
@@ -14,7 +14,10 @@ interface InterviewChatProps {
   isResponding: boolean; // For showing streamed response state
   onToggleMic: () => void;
   showMicReminder: boolean;
+  draftTranscript?: string;
   interimTranscript?: string;
+  connectionState: "disconnected" | "connecting" | "connected" | "failed";
+  onReconnect: () => Promise<void>;
   className?: string;
 }
 
@@ -25,17 +28,23 @@ export function InterviewChat({
   isResponding,
   onToggleMic,
   showMicReminder,
+  draftTranscript,
   interimTranscript,
+  connectionState,
+  onReconnect,
   className,
 }: InterviewChatProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const previousScrollSignatureRef = useRef("");
+  const visibleDraftTranscript =
+    interimTranscript?.trim() || draftTranscript?.trim() || "";
+  const isLiveTranscriptVisible = Boolean(interimTranscript?.trim());
 
   // Auto-scroll to bottom on new messages or interim transcript changes
   useEffect(() => {
     const scrollSignature = `${messages.length}:${messages.at(-1)?.id ?? ""}:${
-      interimTranscript ?? ""
+      visibleDraftTranscript
     }`;
 
     if (scrollSignature === previousScrollSignatureRef.current) {
@@ -47,7 +56,7 @@ export function InterviewChat({
     if (bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  });
+  }, [messages, visibleDraftTranscript]);
 
   return (
     <div
@@ -79,7 +88,11 @@ export function InterviewChat({
                     ? "bg-green-500 animate-pulse"
                     : isResponding
                       ? "bg-amber-500 animate-pulse"
-                      : "bg-muted-foreground",
+                      : connectionState === "failed"
+                        ? "bg-red-500"
+                        : connectionState === "connecting"
+                          ? "bg-amber-500 animate-pulse"
+                          : "bg-muted-foreground",
                 )}
               />
               <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
@@ -87,7 +100,11 @@ export function InterviewChat({
                   ? "Speaking..."
                   : isResponding
                     ? "Responding..."
-                    : "Listening..."}
+                    : connectionState === "failed"
+                      ? "Mic offline"
+                      : connectionState === "connecting"
+                        ? "Connecting..."
+                        : "Listening..."}
               </span>
             </div>
           </div>
@@ -103,6 +120,32 @@ export function InterviewChat({
         </div>
       </div>
 
+      {connectionState !== "connected" && (
+        <div className="border-b bg-amber-500/5 px-4 py-2">
+          <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+              <span>
+                {connectionState === "connecting"
+                  ? "Connecting live transcription..."
+                  : "Live transcription is unavailable. You can retry the microphone connection."}
+              </span>
+            </div>
+
+            {connectionState !== "connecting" && (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-full border bg-background px-3 py-1 font-medium text-foreground transition-colors hover:bg-muted"
+                onClick={() => void onReconnect()}
+              >
+                <RefreshCw className="h-3 w-3" />
+                Retry
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Messages Area */}
       <div
         className="flex-1 overflow-y-auto min-h-0 px-4 md:px-6 scrollbar-thin scrollbar-thumb-muted-foreground/20 hover:scrollbar-thumb-muted-foreground/40"
@@ -113,13 +156,22 @@ export function InterviewChat({
             <ChatMessage key={message.id} message={message} />
           ))}
 
-          {/* Live interim transcript bubble */}
-          {interimTranscript && (
+          {/* Draft transcript bubble */}
+          {visibleDraftTranscript && (
             <div className="flex justify-end animate-in fade-in slide-in-from-bottom-2 duration-200">
               <div className="max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 bg-primary/10 border border-primary/20">
-                <p className="text-sm text-muted-foreground italic leading-relaxed">
-                  {interimTranscript}
-                  <span className="inline-block w-1.5 h-4 ml-1 bg-primary/50 animate-pulse rounded-sm align-middle" />
+                <p
+                  className={cn(
+                    "text-sm leading-relaxed",
+                    isLiveTranscriptVisible
+                      ? "text-muted-foreground italic"
+                      : "text-foreground",
+                  )}
+                >
+                  {visibleDraftTranscript}
+                  {isLiveTranscriptVisible && (
+                    <span className="inline-block w-1.5 h-4 ml-1 bg-primary/50 animate-pulse rounded-sm align-middle" />
+                  )}
                 </p>
               </div>
             </div>

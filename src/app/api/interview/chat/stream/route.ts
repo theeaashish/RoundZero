@@ -12,6 +12,7 @@ import {
   createUserInterviewMessage,
   generateAndUploadInterviewAudio,
   listInterviewMessages,
+  mergeInterviewHistory,
   streamInterviewReply,
 } from "@/server/routers/interview/service";
 
@@ -85,14 +86,16 @@ export async function POST(request: Request) {
     );
   }
 
-  await createUserInterviewMessage({
-    interviewId: interview.id,
-    content: parsedInput.data.message,
-    codeSnippet: parsedInput.data.codeSnippet ?? undefined,
-    language: parsedInput.data.language ?? undefined,
-  });
-
-  const history = await listInterviewMessages(interview.id);
+  const [userMessage, history] = await Promise.all([
+    createUserInterviewMessage({
+      interviewId: interview.id,
+      content: parsedInput.data.message,
+      codeSnippet: parsedInput.data.codeSnippet ?? undefined,
+      language: parsedInput.data.language ?? undefined,
+    }),
+    listInterviewMessages(interview.id),
+  ]);
+  const mergedHistory = mergeInterviewHistory(history, userMessage);
 
   const stream = createUIMessageStream<InterviewStreamMessage>({
     generateId: () => crypto.randomUUID(),
@@ -101,7 +104,7 @@ export async function POST(request: Request) {
       return STREAM_ERROR_MESSAGE;
     },
     execute: async ({ writer }) => {
-      const result = streamInterviewReply(interview, history);
+      const result = streamInterviewReply(interview, mergedHistory);
 
       writer.merge(
         result.toUIMessageStream<InterviewStreamMessage>({

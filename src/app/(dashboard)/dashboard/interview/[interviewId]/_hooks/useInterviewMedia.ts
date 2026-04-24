@@ -22,9 +22,14 @@ export interface InterviewMediaState {
 }
 
 export interface InterviewMediaOptions {
-  onSpeechEnd?: (finalTranscript: string) => void;
   isAssistantResponding?: boolean;
 }
+
+const joinTranscriptSegments = (...segments: string[]) =>
+  segments
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .join(" ");
 
 export const useInterviewMedia = (
   options?: InterviewMediaOptions,
@@ -34,12 +39,7 @@ export const useInterviewMedia = (
 
   const micEnabledRef = useRef(true);
   const prevIsAssistantBusyRef = useRef(false);
-
-  // Stabilize callback refs to avoid stale closures in useLiveSTT
-  const onSpeechEndRef = useRef(options?.onSpeechEnd);
-  useEffect(() => {
-    onSpeechEndRef.current = options?.onSpeechEnd;
-  }, [options?.onSpeechEnd]);
+  const transcriptRef = useRef("");
 
   const { playEncodedAudio, isPlaying, stop: stopAudio } = useAudioPlayer();
 
@@ -58,20 +58,25 @@ export const useInterviewMedia = (
     isRecording,
     connect,
     disconnect,
+    finalizeCurrentUtterance,
     pauseMic,
     resumeMic,
   } = useLiveSTT({
-    onInterimTranscript: (text) => setInterimTranscript(text),
+    onInterimTranscript: (text) =>
+      setInterimTranscript(joinTranscriptSegments(transcriptRef.current, text)),
     onFinalTranscript: (text) => {
-      setTranscript(text);
-      setInterimTranscript("");
+      setInterimTranscript(joinTranscriptSegments(transcriptRef.current, text));
     },
     onUtteranceEnd: (assembledTranscript) => {
       const trimmed = assembledTranscript.trim();
       if (trimmed) {
-        setTranscript(trimmed);
+        const nextTranscript = joinTranscriptSegments(
+          transcriptRef.current,
+          trimmed,
+        );
+        transcriptRef.current = nextTranscript;
+        setTranscript(nextTranscript);
         setInterimTranscript("");
-        onSpeechEndRef.current?.(trimmed);
       }
     },
     onSpeechStarted: () => setInterimTranscript(""),
@@ -119,13 +124,21 @@ export const useInterviewMedia = (
     }
 
     if (isRecording) {
+      finalizeCurrentUtterance();
       pauseMic();
       micEnabledRef.current = false;
     } else {
       resumeMic();
       micEnabledRef.current = true;
     }
-  }, [connectionState, isRecording, tryConnect, pauseMic, resumeMic]);
+  }, [
+    connectionState,
+    isRecording,
+    tryConnect,
+    finalizeCurrentUtterance,
+    pauseMic,
+    resumeMic,
+  ]);
 
   const stopAllMedia = useCallback(() => {
     stopAudio();
@@ -133,11 +146,18 @@ export const useInterviewMedia = (
     micEnabledRef.current = false;
   }, [stopAudio, disconnect]);
 
-  const clearTranscript = useCallback(() => setTranscript(""), []);
-  const restoreTranscript = useCallback(
-    (text: string) => setTranscript(text),
-    [],
-  );
+  const clearTranscript = useCallback(() => {
+    transcriptRef.current = "";
+    setTranscript("");
+    setInterimTranscript("");
+  }, []);
+
+  const restoreTranscript = useCallback((text: string) => {
+    const restoredTranscript = text.trim();
+    transcriptRef.current = restoredTranscript;
+    setTranscript(restoredTranscript);
+    setInterimTranscript("");
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {

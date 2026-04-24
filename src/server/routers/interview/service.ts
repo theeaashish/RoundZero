@@ -68,6 +68,10 @@ type InterviewPromptContext = {
   jobDescription?: string | null;
 };
 
+const SESSION_SNIPPET_LIMIT = 280;
+const DSA_SIGNAL_REGEX =
+  /\b(array|hash ?map|binary search|two pointers|tree|graph|heap|stack|queue|dfs|bfs|dynamic programming|dp|time complexity|space complexity)\b/i;
+
 const SHORT_INTERVIEW_REPORT: InterviewReport = {
   overallScore: 0,
   categoryScores: {
@@ -102,8 +106,9 @@ const FALLBACK_GENERATED_REPORT: InterviewReport = {
 
 export const buildPromptForInterview = (
   interview: InterviewPromptContext,
-): string =>
-  buildSystemPrompt({
+  messages: InterviewMessageRecord[] = [],
+): string => {
+  const basePrompt = buildSystemPrompt({
     jobTitle: interview.jobTitle,
     resumeText: interview.resumeText ?? "",
     experienceLevel: interview.experienceLevel as ExperienceLevel,
@@ -113,6 +118,10 @@ export const buildPromptForInterview = (
     companyName: interview.companyName ?? undefined,
     jobDescription: interview.jobDescription ?? undefined,
   });
+
+  const liveSessionGuidance = buildLiveSessionGuidance(interview, messages);
+  return `${basePrompt}\n\n${liveSessionGuidance}`;
+};
 
 export const serializeInterviewMessage = (message: InterviewMessageRecord) => ({
   id: message.id,
@@ -157,6 +166,103 @@ export const getLatestAssistantMessage = (
   return null;
 };
 
+const normalizeSnippet = (value: string | null | undefined): string => {
+  if (!value) {
+    return "None";
+  }
+
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= SESSION_SNIPPET_LIMIT) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, SESSION_SNIPPET_LIMIT)}...`;
+};
+
+const getInterviewPhase = (
+  answerCount: number,
+): "OPENING" | "DISCOVERY" | "DEEP_DIVE" | "WRAP_UP" => {
+  if (answerCount === 0) {
+    return "OPENING";
+  }
+
+  if (answerCount < 2) {
+    return "DISCOVERY";
+  }
+
+  if (answerCount < 5) {
+    return "DEEP_DIVE";
+  }
+
+  return "WRAP_UP";
+};
+
+const buildLiveSessionGuidance = (
+  interview: InterviewPromptContext,
+  messages: InterviewMessageRecord[],
+): string => {
+  const userMessages = messages.filter(
+    (message) => message.role === MESSAGE_ROLES.USER,
+  );
+  const assistantMessages = messages.filter(
+    (message) => message.role === MESSAGE_ROLES.ASSISTANT,
+  );
+  const lastUserAnswer = userMessages.at(-1)?.content;
+  const lastAssistantPrompt = assistantMessages.at(-1)?.content;
+  const answerCount = userMessages.length;
+  const phase = getInterviewPhase(answerCount);
+  const hasCodeSubmission = messages.some((message) =>
+    Boolean(message.codeSnippet),
+  );
+  const hasDSACoverage = messages.some((message) => {
+    const combinedContent = `${message.content}\n${message.codeSnippet ?? ""}`;
+    return DSA_SIGNAL_REGEX.test(combinedContent);
+  });
+
+  let nextObjective =
+    "Continue the current topic with one focused follow-up before switching contexts.";
+
+  if (phase === "OPENING") {
+    nextObjective =
+      "Ask a strong opening question tied to the role, resume, or job description.";
+  } else if (phase === "DISCOVERY") {
+    nextObjective =
+      "Probe the candidate's first answers for specifics and depth instead of jumping too quickly.";
+  } else if (phase === "DEEP_DIVE") {
+    nextObjective =
+      "Challenge tradeoffs, ask for reasoning, and test real-world decision making.";
+  } else if (phase === "WRAP_UP") {
+    nextObjective =
+      "Ask one last synthesis question or targeted stretch question, then prepare to close cleanly.";
+  }
+
+  if (
+    interview.type === "TECHNICAL" &&
+    interview.includeDSA &&
+    answerCount >= 2 &&
+    !hasDSACoverage
+  ) {
+    nextObjective +=
+      " A DSA-focused question is still required, so introduce it soon without making the transition feel abrupt.";
+  }
+
+  return `### LIVE SESSION STATE
+- Candidate answers so far: ${answerCount}
+- Current phase: ${phase}
+- Code shared: ${hasCodeSubmission ? "Yes" : "No"}
+- DSA covered: ${hasDSACoverage ? "Yes" : "No"}
+- Most recent interviewer prompt: ${normalizeSnippet(lastAssistantPrompt)}
+- Most recent candidate answer: ${normalizeSnippet(lastUserAnswer)}
+- Immediate objective: ${nextObjective}
+
+### LIVE SESSION BEHAVIOR RULES
+- Do not restart the interview or repeat earlier setup questions.
+- Build on the most recent answer before moving to a new area.
+- If the candidate is vague, ask one concise follow-up for specifics.
+- Keep the interview realistic: one question at a time, natural transitions, no monologues.
+- When relevant, reference the candidate's prior answer explicitly so the conversation feels continuous.`;
+};
+
 export const listInterviewMessages = async (
   interviewId: string,
 ): Promise<InterviewMessageRecord[]> =>
@@ -165,6 +271,18 @@ export const listInterviewMessages = async (
     orderBy: { createdAt: "asc" },
     select: interviewMessageSelect,
   });
+
+export const mergeInterviewHistory = (
+  history: InterviewMessageRecord[],
+  nextMessage: InterviewMessageRecord,
+): InterviewMessageRecord[] => {
+  const messageById = new Map(history.map((message) => [message.id, message]));
+  messageById.set(nextMessage.id, nextMessage);
+
+  return Array.from(messageById.values()).sort(
+    (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
+  );
+};
 
 export const createUserInterviewMessage = async (input: {
   interviewId: string;
@@ -266,7 +384,7 @@ export const generateInterviewReply = async (
   messages: InterviewMessageRecord[],
 ): Promise<string> =>
   generateInterviewResponse(
-    buildPromptForInterview(interview),
+    buildPromptForInterview(interview, messages),
     toAIMessages(messages),
   );
 
@@ -275,7 +393,7 @@ export const streamInterviewReply = (
   messages: InterviewMessageRecord[],
 ) =>
   streamInterviewResponse(
-    buildPromptForInterview(interview),
+    buildPromptForInterview(interview, messages),
     toAIMessages(messages),
   );
 

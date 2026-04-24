@@ -9,6 +9,7 @@ import {
   generateAndUploadInterviewAudio,
   generateInterviewReply,
   listInterviewMessages,
+  mergeInterviewHistory,
   serializeInterviewMessage,
 } from "./service";
 
@@ -48,17 +49,23 @@ export async function chat({
     throw new ORPCError("NOT_FOUND", { message: "Interview not found" });
   }
 
-  const userMessage = await createUserInterviewMessage({
-    interviewId: interview.id,
-    content: input.message,
-    codeSnippet: input.codeSnippet,
-    language: input.language,
-  });
+  const [userMessage, history] = await Promise.all([
+    createUserInterviewMessage({
+      interviewId: interview.id,
+      content: input.message,
+      codeSnippet: input.codeSnippet,
+      language: input.language,
+    }),
+    listInterviewMessages(interview.id),
+  ]);
 
-  const history = await listInterviewMessages(interview.id);
+  const mergedHistory = mergeInterviewHistory(history, userMessage);
 
   try {
-    const aiResponseText = await generateInterviewReply(interview, history);
+    const aiResponseText = await generateInterviewReply(
+      interview,
+      mergedHistory,
+    );
     const assistantMessage = await createAssistantInterviewMessage({
       interviewId: interview.id,
       content: aiResponseText,
