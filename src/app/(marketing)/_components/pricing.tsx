@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { ArrowRight, Check, Sparkles, Zap } from "lucide-react";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -151,9 +152,12 @@ export function Pricing() {
                         : ""
                     }`}
                     variant={plan.popular ? "default" : "outline"}
+                    asChild
                   >
-                    {plan.cta}
-                    <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                    <Link href="/sign-in">
+                      {plan.cta}
+                      <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                    </Link>
                   </Button>
 
                   {/* Features */}

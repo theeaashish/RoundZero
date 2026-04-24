@@ -97,13 +97,16 @@ export function Hero() {
             <Button
               size="lg"
               className="h-14 px-8 text-base font-semibold shadow-2xl shadow-primary/30 hover:shadow-primary/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 group w-full sm:w-auto relative overflow-hidden"
+              asChild
             >
-              <span className="relative z-10 flex items-center">
-                <Zap className="mr-2 h-5 w-5" />
-                Start free practice
-                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </span>
-              <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <Link href="/sign-in" className="flex items-center">
+                <span className="relative z-10 flex items-center">
+                  <Zap className="mr-2 h-5 w-5" />
+                  Start free practice
+                  <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </span>
+                <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </Link>
             </Button>
             <Button
               size="lg"

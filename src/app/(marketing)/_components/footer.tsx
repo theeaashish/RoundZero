@@ -72,19 +72,16 @@ export function Footer() {
               performance with RoundZero.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button
-                size="lg"
-                className="h-14 px-8 text-base font-semibold shadow-2xl shadow-primary/30 hover:shadow-primary/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 group"
-              >
-                Start practicing for free
-                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+              <Button size="lg" className="h-14 px-8 text-base font-semibold shadow-2xl shadow-primary/30 hover:shadow-primary/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 group" asChild>
+                <Link href="/sign-in">
+                  Start practicing for free
+                  <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </Link>
               </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-14 px-8 text-base font-semibold border-border/50 hover:border-border"
-              >
-                Schedule a demo
+              <Button size="lg" variant="outline" className="h-14 px-8 text-base font-semibold border-border/50 hover:border-border" asChild>
+                <Link href="#demo">
+                  Schedule a demo
+                </Link>
               </Button>
             </div>
           </motion.div>
