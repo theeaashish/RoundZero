@@ -494,3 +494,90 @@
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.08) !important;
   overflow: hidden !important;
 }
+
+/* Premium thin scrollbar for all sidebar panels */
+[data-sidebar="content"],
+[data-sidebar="content"] * {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(24 24 27 / 32%) transparent;
+}
+
+.dark [data-sidebar="content"],
+.dark [data-sidebar="content"] * {
+  scrollbar-color: rgb(250 250 250 / 32%) transparent;
+}
+
+[data-sidebar="content"]::-webkit-scrollbar,
+[data-sidebar="content"] *::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+[data-sidebar="content"]::-webkit-scrollbar-track,
+[data-sidebar="content"] *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[data-sidebar="content"]::-webkit-scrollbar-thumb,
+[data-sidebar="content"] *::-webkit-scrollbar-thumb {
+  background: rgb(24 24 27 / 32%);
+  border-radius: 9999px;
+}
+
+.dark [data-sidebar="content"]::-webkit-scrollbar-thumb,
+.dark [data-sidebar="content"] *::-webkit-scrollbar-thumb {
+  background: rgb(250 250 250 / 32%);
+}
+
+[data-sidebar="content"]::-webkit-scrollbar-thumb:hover,
+[data-sidebar="content"] *::-webkit-scrollbar-thumb:hover {
+  background: rgb(24 24 27 / 48%);
+}
+
+.dark [data-sidebar="content"]::-webkit-scrollbar-thumb:hover,
+.dark [data-sidebar="content"] *::-webkit-scrollbar-thumb:hover {
+  background: rgb(250 250 250 / 48%);
+}
+
+/* Main browser/page scrollbar (right edge in Chrome) */
+html,
+body {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(24 24 27 / 34%) transparent;
+}
+
+.dark html,
+.dark body {
+  scrollbar-color: rgb(250 250 250 / 34%) transparent;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 8px !important;
+}
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+  background: rgb(24 24 27 / 34%) !important;
+  border-radius: 9999px !important;
+}
+
+.dark html::-webkit-scrollbar-thumb,
+.dark body::-webkit-scrollbar-thumb {
+  background: rgb(250 250 250 / 34%) !important;
+}
+
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover {
+  background: rgb(24 24 27 / 52%) !important;
+}
+
+.dark html::-webkit-scrollbar-thumb:hover,
+.dark body::-webkit-scrollbar-thumb:hover {
+  background: rgb(250 250 250 / 52%) !important;
+}
