@@ -8,18 +8,28 @@ export const metadata = {
   description: "Sign in to your Interview AI account",
 };
 
-export default async function AuthPage() {
+export default async function AuthPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ redirect?: string; callbackUrl?: string }>;
+}) {
   const session = await auth.api.getSession({
     headers: await headers(),
   });
 
+  const resolvedSearchParams = await searchParams;
+  const redirectUrl =
+    resolvedSearchParams?.redirect ||
+    resolvedSearchParams?.callbackUrl ||
+    "/dashboard";
+
   if (session) {
-    redirect("/dashboard");
+    redirect(redirectUrl);
   }
 
   return (
     <div className="max-sm:px-5">
-      <LoginForm />
+      <LoginForm redirectUrl={redirectUrl} />
     </div>
   );
 }

@@ -15,7 +15,12 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { orpc } from "@/lib/orpc-client";
 import type { AppRouter } from "@/server/routers/app";
@@ -96,7 +101,9 @@ export function SystemDesignHistoryList({
             <CopyPlus className="h-8 w-8 text-primary" />
           </div>
           <div className="space-y-2">
-            <h3 className="text-xl font-semibold">No system design attempts yet</h3>
+            <h3 className="text-xl font-semibold">
+              No system design attempts yet
+            </h3>
             <p className="max-w-md text-sm text-muted-foreground">
               Start a challenge to build architecture practice history and get
               feedback over time.
@@ -138,8 +145,9 @@ export function SystemDesignHistoryList({
 
 function AttemptCard({ attempt }: { attempt: Attempt }) {
   const badgeClass =
-    COMPLEXITY_BADGE[attempt.problem.complexity as keyof typeof COMPLEXITY_BADGE] ??
-    COMPLEXITY_BADGE.MEDIUM;
+    COMPLEXITY_BADGE[
+      attempt.problem.complexity as keyof typeof COMPLEXITY_BADGE
+    ] ?? COMPLEXITY_BADGE.MEDIUM;
 
   return (
     <Card className="h-full border-border/40 bg-card/70 backdrop-blur-sm">

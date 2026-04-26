@@ -88,7 +88,8 @@ export function InterviewList({ initialData }: InterviewListProps) {
     }
 
     return [...visible].sort(
-      (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
+      (a, b) =>
+        new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
     );
   }, [interviews, search, sortBy]);
 
@@ -165,10 +166,10 @@ export function InterviewList({ initialData }: InterviewListProps) {
               {search
                 ? `No interviews match "${search}". Try a different keyword.`
                 : statusFilter !== "ALL"
-                ? `You don't have any ${statusFilter
-                    .toLowerCase()
-                    .replace("_", " ")} interviews.`
-                : "You haven't started any interviews yet. Start your first session to get AI-powered feedback."}
+                  ? `You don't have any ${statusFilter
+                      .toLowerCase()
+                      .replace("_", " ")} interviews.`
+                  : "You haven't started any interviews yet. Start your first session to get AI-powered feedback."}
             </p>
           </div>
           {statusFilter === "ALL" && (

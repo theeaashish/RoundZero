@@ -1,7 +1,15 @@
 "use client";
 
-import { ArrowRight, Clock, Layers, Server, Sparkles } from "lucide-react";
+import {
+  ArrowRight,
+  Clock,
+  Layers,
+  Server,
+  Share2,
+  Sparkles,
+} from "lucide-react";
 import Link from "next/link";
+import { ShareDrawer } from "@/components/share-drawer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -89,8 +97,25 @@ export function SystemDesignCard({ problem }: SystemDesignCardProps) {
             <Badge variant="outline">{labelize(problem.interviewRole)}</Badge>
           </div>
 
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary/50 text-muted-foreground">
-            <Server className="h-3.5 w-3.5" />
+          <div className="flex items-center gap-2">
+            <ShareDrawer
+              config={{
+                title: problem.title,
+                slug: problem.id,
+                type: "system-design",
+              }}
+            >
+              <button
+                type="button"
+                className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary/50 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                aria-label="Share challenge"
+              >
+                <Share2 className="h-3.5 w-3.5" />
+              </button>
+            </ShareDrawer>
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary/50 text-muted-foreground">
+              <Server className="h-3.5 w-3.5" />
+            </div>
           </div>
         </div>
 

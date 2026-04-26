@@ -14,7 +14,11 @@ import {
 } from "@/components/ui/card";
 import { authClient } from "@/lib/auth-client";
 
-export default function LoginForm() {
+export default function LoginForm({
+  redirectUrl = "/dashboard",
+}: {
+  redirectUrl?: string;
+}) {
   const [githubPending, startGithubTransition] = useTransition();
   const [googlePending, startGoogleTransition] = useTransition();
 
@@ -22,7 +26,7 @@ export default function LoginForm() {
     startGithubTransition(async () => {
       await authClient.signIn.social({
         provider: "github",
-        callbackURL: "/dashboard",
+        callbackURL: redirectUrl,
         fetchOptions: {
           onSuccess: () => {
             toast.success("Signed in with GitHub, redirecting to dashboard...");
@@ -39,7 +43,7 @@ export default function LoginForm() {
     startGoogleTransition(async () => {
       await authClient.signIn.social({
         provider: "google",
-        callbackURL: "/dashboard",
+        callbackURL: redirectUrl,
         fetchOptions: {
           onSuccess: () => {
             toast.success("Signed in with Google, redirecting to dashboard...");

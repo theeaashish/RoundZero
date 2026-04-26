@@ -15,7 +15,11 @@ export async function proxy(request: NextRequest) {
   const isAuthPath = authPaths.some((path) => pathname.startsWith(path));
 
   // Skip middleware for non-relevant paths
-  if (!isProtectedPath && !isAuthPath) {
+  if (
+    !isProtectedPath &&
+    !isAuthPath &&
+    !pathname.startsWith("/system-design/")
+  ) {
     return NextResponse.next();
   }
 
@@ -23,6 +27,25 @@ export async function proxy(request: NextRequest) {
   const sessionCookie =
     request.cookies.get("better-auth.session_token") ||
     request.cookies.get("__Secure-better-auth.session_token");
+
+  // Handle shared system-design links
+  if (pathname.startsWith("/system-design/")) {
+    const slug = pathname.split("/")[2];
+    if (slug) {
+      if (!sessionCookie) {
+        const signInUrl = new URL("/sign-in", request.url);
+        signInUrl.searchParams.set("redirect", pathname);
+        return NextResponse.redirect(signInUrl);
+      } else {
+        const destUrl = new URL(
+          `/dashboard/practice/design/${slug}`,
+          request.url,
+        );
+        destUrl.searchParams.delete("redirect");
+        return NextResponse.redirect(destUrl);
+      }
+    }
+  }
 
   // Redirect unauthenticated users from protected routes to sign-in
   if (isProtectedPath && !sessionCookie) {
