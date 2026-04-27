@@ -76,14 +76,26 @@ function isMissingStripeResourceError(
     type?: string;
     rawType?: string;
     message?: string;
+    raw?: {
+      code?: string;
+      param?: string;
+      type?: string;
+      message?: string;
+    };
   };
 
+  const code = stripeError.code ?? stripeError.raw?.code;
+  const errorParam = stripeError.param ?? stripeError.raw?.param;
+  const errorType = stripeError.type ?? stripeError.raw?.type;
+  const rawType = stripeError.rawType;
+  const message = stripeError.message ?? stripeError.raw?.message;
+
   return (
-    stripeError.code === "resource_missing" &&
-    stripeError.param === param &&
-    (stripeError.type === "StripeInvalidRequestError" ||
-      stripeError.rawType === "invalid_request_error" ||
-      stripeError.message?.includes(`No such ${param}`) === true)
+    code === "resource_missing" &&
+    (errorParam === undefined || errorParam === param) &&
+    (errorType === "StripeInvalidRequestError" ||
+      rawType === "invalid_request_error" ||
+      message?.includes(`No such ${param}`) === true)
   );
 }
 
@@ -180,7 +192,26 @@ export async function prepareStripeCheckout(
         customerReset = true;
       }
     } catch (error) {
-      if (isMissingStripeResourceError(error, "customer")) {
+      const stripeError = error as {
+        code?: string;
+        raw?: {
+          code?: string;
+        };
+        message?: string;
+      };
+
+      const missingResourceCode =
+        stripeError?.code === "resource_missing" ||
+        stripeError?.raw?.code === "resource_missing";
+
+      const missingCustomerMessage =
+        stripeError?.message?.includes("No such customer") === true;
+
+      if (
+        isMissingStripeResourceError(error, "customer") ||
+        missingResourceCode ||
+        missingCustomerMessage
+      ) {
         await clearStaleStripeState(userId, customerId);
         customerReset = true;
         continue;
