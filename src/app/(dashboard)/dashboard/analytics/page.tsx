@@ -2,6 +2,7 @@
 
 import { Calendar, Filter } from "lucide-react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -113,7 +114,13 @@ export default function AnalyticsPage() {
           <Button variant="outline" size="icon">
             <Filter className="h-4 w-4" />
           </Button>
-          <ExportButton data={data} isLoading={isLoading} period={period} />
+          {data?.canExport ? (
+            <ExportButton data={data} isLoading={isLoading} period={period} />
+          ) : (
+            <Button variant="outline" asChild disabled={isLoading}>
+              <Link href="/dashboard/billing">Upgrade to export</Link>
+            </Button>
+          )}
         </div>
       </div>
 

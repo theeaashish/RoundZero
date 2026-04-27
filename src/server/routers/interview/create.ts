@@ -2,6 +2,7 @@ import { ORPCError } from "@orpc/client";
 import { z } from "zod";
 
 import { STORAGE_CONFIG } from "@/config/storage";
+import { assertInterviewQuotaAvailable } from "@/lib/billing/subscription";
 import db from "@/lib/prisma";
 import type { Context } from "@/server/orpc";
 import {
@@ -36,6 +37,8 @@ export async function createInterview({
   if (!user) {
     throw new ORPCError("UNAUTHORIZED");
   }
+
+  await assertInterviewQuotaAvailable(user.id);
 
   const {
     jobTitle,

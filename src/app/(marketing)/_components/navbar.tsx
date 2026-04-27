@@ -39,7 +39,7 @@ export function Navbar() {
           <div className="hidden md:flex items-center gap-8 text-sm font-medium">
             {[
               { href: "#features", label: "Features" },
-              { href: "#pricing", label: "Pricing" },
+              { href: "/pricing", label: "Pricing" },
               { href: "#demo", label: "Demo" },
             ].map((item) => (
               <Link

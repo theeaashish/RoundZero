@@ -1,4 +1,5 @@
 import { ORPCError } from "@orpc/client";
+import { assertFeatureAccess } from "@/lib/billing/subscription";
 import db from "@/lib/prisma";
 import type { Context } from "@/server/orpc";
 
@@ -11,6 +12,7 @@ export async function getProblems({
 }) {
   const { user } = context;
   if (!user) throw new ORPCError("UNAUTHORIZED");
+  await assertFeatureAccess(user.id, "canAccessSystemDesign");
 
   const problems = await db.systemDesignProblem.findMany({
     where: {

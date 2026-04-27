@@ -63,6 +63,7 @@ export const getDataOutputSchema = z.object({
   timeByWeek: z.array(timeByWeekItemSchema),
   activityHeatmap: z.array(activityHeatmapItemSchema),
   insights: insightsSchema,
+  canExport: z.boolean(),
 });
 
 export const getDataInputSchema = z.object({

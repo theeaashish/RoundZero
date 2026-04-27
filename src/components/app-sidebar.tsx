@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import {
   ChevronUp,
   CreditCard,
@@ -45,6 +46,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useSignOut } from "@/hooks/use-signout";
 import { authClient } from "@/lib/auth-client";
+import { orpc } from "@/lib/orpc-client";
 
 const mainNavItems = [
   {
@@ -91,11 +93,32 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { data: session } = authClient.useSession();
   const signOut = useSignOut();
+  const { data: billingState } = useQuery({
+    ...orpc.billing.getState.queryOptions({
+      input: {},
+      staleTime: 1000 * 30,
+    }),
+    enabled: !!session?.user,
+  });
 
   const isActive = (url: string) => {
     if (url === "/dashboard") return pathname === url;
     return pathname.startsWith(url);
   };
+
+  const usageLabel = billingState?.usage.isUnlimited
+    ? "Unlimited interviews"
+    : `${billingState?.usage.used ?? 0}/${billingState?.usage.limit ?? 0} interviews`;
+  const usagePercent =
+    billingState?.usage.isUnlimited || !billingState?.usage.limit
+      ? 100
+      : Math.min(
+          Math.round(
+            (billingState.usage.used / billingState.usage.limit) * 100 || 0,
+          ),
+          100,
+        );
+  const isElite = billingState?.planId === "elite";
 
   return (
     <Sidebar
@@ -204,14 +227,16 @@ export function AppSidebar() {
           <div className="rounded-lg border border-sidebar-border/50 bg-sidebar-accent/50 p-3">
             <div className="flex items-center gap-2 mb-2">
               <Zap className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium">Upgrade to Pro</span>
+              <span className="text-sm font-medium">
+                {billingState ? `${billingState.plan.name} plan` : "Plan usage"}
+              </span>
             </div>
             <div className="space-y-1.5 mb-3">
               <div className="flex justify-between text-xs text-muted-foreground">
-                <span>2/5 interviews</span>
-                <span>40%</span>
+                <span>{usageLabel}</span>
+                <span>{usagePercent}%</span>
               </div>
-              <Progress value={40} className="h-1" />
+              <Progress value={usagePercent} className="h-1" />
             </div>
             <Button
               size="sm"
@@ -221,7 +246,7 @@ export function AppSidebar() {
             >
               <Link href="/dashboard/billing">
                 <Sparkles className="h-3 w-3 mr-1" />
-                Upgrade
+                {isElite ? "Manage billing" : "Upgrade"}
               </Link>
             </Button>
           </div>

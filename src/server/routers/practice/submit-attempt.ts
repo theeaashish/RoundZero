@@ -2,6 +2,7 @@ import { ORPCError } from "@orpc/client";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { architectureCanvasSchema } from "@/lib/architecture-types";
+import { assertFeatureAccess } from "@/lib/billing/subscription";
 import db from "@/lib/prisma";
 import type { Context } from "@/server/orpc";
 
@@ -21,6 +22,7 @@ export async function submitAttempt({
 }) {
   const { user } = context;
   if (!user) throw new ORPCError("UNAUTHORIZED");
+  await assertFeatureAccess(user.id, "canAccessSystemDesign");
 
   try {
     const architectureJson =

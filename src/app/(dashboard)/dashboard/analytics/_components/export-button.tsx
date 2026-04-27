@@ -30,7 +30,7 @@ const getPeriodLabel = (period: Period) => {
 export function ExportButton({ data, isLoading, period }: ExportButtonProps) {
   const isClient = typeof window !== "undefined";
 
-  if (!isClient || isLoading || !data) {
+  if (!isClient || isLoading || !data || !data.canExport) {
     return (
       <Button variant="outline" size="sm" disabled>
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />

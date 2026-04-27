@@ -1,5 +1,6 @@
 import { ORPCError } from "@orpc/client";
 import { z } from "zod";
+import { assertFeatureAccess } from "@/lib/billing/subscription";
 import db from "@/lib/prisma";
 import type { Context } from "@/server/orpc";
 
@@ -16,6 +17,7 @@ export async function getAttempt({
 }) {
   const { user } = context;
   if (!user) throw new ORPCError("UNAUTHORIZED");
+  await assertFeatureAccess(user.id, "canAccessSystemDesign");
 
   try {
     const attempt = await db.systemDesignAttempt.findFirst({

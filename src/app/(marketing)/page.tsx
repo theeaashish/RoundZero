@@ -24,13 +24,13 @@ export default function Home() {
       {/* Premium gradient mesh background */}
       <div className="pointer-events-none fixed inset-0 -z-10 bg-background">
         {/* Solid muted shapes instead of gradients for brutalist/distinctive look */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[1000px] rounded-full bg-primary/5 blur-3xl animate-pulse" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-250 h-250 rounded-full bg-primary/5 blur-3xl animate-pulse" />
         <div
-          className="absolute top-[40%] -right-[20%] w-[800px] h-[800px] rounded-full bg-primary/5 blur-3xl animate-pulse"
+          className="absolute top-[40%] -right-[20%] w-200 h-200 rounded-full bg-primary/5 blur-3xl animate-pulse"
           style={{ animationDelay: "2s" }}
         />
         <div
-          className="absolute top-[70%] -left-[10%] w-[600px] h-[600px] rounded-full bg-primary/5 blur-3xl animate-pulse"
+          className="absolute top-[70%] -left-[10%] w-150 h-150 rounded-full bg-primary/5 blur-3xl animate-pulse"
           style={{ animationDelay: "4s" }}
         />
       </div>

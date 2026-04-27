@@ -1,5 +1,6 @@
 import type { z } from "zod";
 
+import { getCurrentPlanStateForUser } from "@/lib/billing/subscription";
 import db from "@/lib/prisma";
 import type { Context } from "@/server/orpc";
 import { calculateHeatmap } from "./calculations/heatmap";
@@ -32,6 +33,7 @@ export async function getData({
 
   const { period } = input;
   const { startDate, endDate } = getDateRange(period);
+  const planState = await getCurrentPlanStateForUser(user.id);
 
   // Calculate previous period dates for comparison
   const periodLength = endDate.getTime() - startDate.getTime();
@@ -142,5 +144,6 @@ export async function getData({
     timeByWeek,
     activityHeatmap,
     insights,
+    canExport: planState.plan.featureFlags.canExportAnalytics,
   };
 }

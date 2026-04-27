@@ -7,6 +7,7 @@ import {
   summarizeArchitectureHeuristics,
 } from "@/lib/architecture-serializer";
 import { architectureCanvasSchema } from "@/lib/architecture-types";
+import { assertFeatureAccess } from "@/lib/billing/subscription";
 import { generateArchitectureEvaluation } from "@/lib/gemini";
 import db from "@/lib/prisma";
 import {
@@ -34,6 +35,7 @@ export async function evaluateArchitecture({
 }) {
   const { user } = context;
   if (!user) throw new ORPCError("UNAUTHORIZED");
+  await assertFeatureAccess(user.id, "canAccessSystemDesign");
 
   const { problemId, nodes, edges } = input;
 

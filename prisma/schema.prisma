@@ -22,7 +22,7 @@ model User {
   banExpires           Int?
   credits              Int                   @default(3)
   tier                 String                @default("FREE")
-  stripeId             String?
+  stripeCustomerId     String?
   totalInterviews      Int                   @default(0)
   totalPracticeTime    Int                   @default(0)
   currentStreak        Int                   @default(0)
@@ -33,6 +33,7 @@ model User {
   resumes              Resume[]
   sessions             Session[]
   systemDesignAttempts SystemDesignAttempt[]
+  subscriptions        Subscription[]
 
   @@map("user")
 }
@@ -219,4 +220,36 @@ enum MessageRole {
 enum Role {
   user
   admin
+}
+
+model Subscription {
+  id                   String    @id @default(uuid())
+  plan                 String
+  referenceId          String
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  priceId              String?
+  amountCents          Int?
+  currency             String?
+  status               String
+  periodStart          DateTime?
+  periodEnd            DateTime?
+  cancelAtPeriodEnd    Boolean?
+  cancelAt             DateTime?
+  canceledAt           DateTime?
+  endedAt              DateTime?
+  seats                Int?
+  trialStart           DateTime?
+  trialEnd             DateTime?
+  billingInterval      String?
+  stripeScheduleId     String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  
+  user                 User      @relation(fields: [referenceId], references: [id], onDelete: Cascade)
+
+  @@index([referenceId])
+  @@index([referenceId, status])
+  @@unique([stripeSubscriptionId])
+  @@map("subscription")
 }
