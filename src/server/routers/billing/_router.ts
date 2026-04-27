@@ -1,10 +1,35 @@
 import { z } from "zod";
+import { prepareStripeCheckout } from "@/lib/billing/stripe";
 import { getCurrentPlanStateForUser } from "@/lib/billing/subscription";
 import { protectedProcedure } from "@/server/orpc";
 
 const planIdSchema = z.enum(["free", "pro", "elite"]);
+const paidPlanIdSchema = z.enum(["pro", "elite"]);
 
 export const billingRouter = {
+  prepareCheckout: protectedProcedure
+    .route({
+      description:
+        "Validate Stripe resources and clear stale Stripe state before checkout",
+      method: "POST",
+      path: "/billing/prepare-checkout",
+      summary: "Prepare Checkout",
+      tags: ["Billing"],
+    })
+    .input(
+      z.object({
+        planId: paidPlanIdSchema,
+      }),
+    )
+    .output(
+      z.object({
+        customerReset: z.boolean(),
+      }),
+    )
+    .handler(async ({ context, input }) => {
+      return prepareStripeCheckout(context.user.id, input.planId);
+    }),
+
   getState: protectedProcedure
     .route({
       description: "Get the user's subscription, plan, and usage state",

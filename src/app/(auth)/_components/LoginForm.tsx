@@ -19,6 +19,12 @@ export default function LoginForm({
 }: {
   redirectUrl?: string;
 }) {
+  type AuthErrorContext = {
+    error?: {
+      message?: string;
+    };
+  };
+
   const [githubPending, startGithubTransition] = useTransition();
   const [googlePending, startGoogleTransition] = useTransition();
 
@@ -31,7 +37,7 @@ export default function LoginForm({
           onSuccess: () => {
             toast.success("Signed in with GitHub, redirecting to dashboard...");
           },
-          onError: (ctx) => {
+          onError: (ctx: AuthErrorContext) => {
             toast.error(ctx.error?.message || "Failed to sign in with GitHub");
           },
         },
@@ -48,7 +54,7 @@ export default function LoginForm({
           onSuccess: () => {
             toast.success("Signed in with Google, redirecting to dashboard...");
           },
-          onError: (ctx) => {
+          onError: (ctx: AuthErrorContext) => {
             toast.error(ctx.error?.message || "Failed to sign in with Google");
           },
         },

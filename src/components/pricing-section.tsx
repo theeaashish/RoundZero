@@ -5,7 +5,10 @@ import { CheckCircle2, Code2, Sparkles, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { toast } from "sonner";
+import {
+  CheckoutIssueDialog,
+  type CheckoutIssueDialogState,
+} from "@/components/checkout-issue-dialog";
 import * as PricingCard from "@/components/pricing-card";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
@@ -14,7 +17,7 @@ import {
   getPublicPlanConfigs,
   type PlanId,
 } from "@/lib/billing/plan";
-import { orpc } from "@/lib/orpc-client";
+import { orpc, orpcClient } from "@/lib/orpc-client";
 import { cn } from "@/lib/utils";
 
 const planIcons = {
@@ -66,6 +69,8 @@ function getPlanButtonLabel(
 export function PricingSection() {
   const router = useRouter();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const [checkoutIssue, setCheckoutIssue] =
+    useState<CheckoutIssueDialogState | null>(null);
   const { data: session } = authClient.useSession();
   const { data: billingState } = useQuery({
     ...orpc.billing.getState.queryOptions({
@@ -76,6 +81,40 @@ export function PricingSection() {
   });
 
   const currentPlanId = billingState?.planId;
+
+  const openCheckoutIssueDialog = (error: unknown) => {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Something went wrong while starting checkout.";
+
+    if (message.includes("Stripe price ID not found")) {
+      setCheckoutIssue({
+        title: "Stripe mode mismatch",
+        description:
+          "Your current Stripe secret key and plan price IDs are from different modes.",
+        detail:
+          "Use test price IDs with your test secret key locally, and live price IDs with your live secret key in production.",
+      });
+      return;
+    }
+
+    if (message.includes("No such customer")) {
+      setCheckoutIssue({
+        title: "Stale Stripe customer",
+        description:
+          "This account is linked to a Stripe customer that does not exist in the current Stripe mode.",
+        detail:
+          "We can clear stale Stripe state and recreate the customer on your next checkout attempt.",
+      });
+      return;
+    }
+
+    setCheckoutIssue({
+      title: "Unable to start checkout",
+      description: message,
+    });
+  };
 
   const handleCheckout = async (planId: PlanId, href: string) => {
     if (planId === "free") {
@@ -92,7 +131,10 @@ export function PricingSection() {
       (plan) => plan.id === planId,
     );
     if (!targetPlan?.stripePlanName) {
-      toast.error("Unable to start checkout for this plan.");
+      setCheckoutIssue({
+        title: "Checkout unavailable",
+        description: "Unable to start checkout for this plan.",
+      });
       return;
     }
 
@@ -100,6 +142,10 @@ export function PricingSection() {
 
     setLoadingPlan(planId);
     try {
+      await orpcClient.billing.prepareCheckout({
+        planId: targetPlan.stripePlanName,
+      });
+
       const { data, error } = await authClient.subscription.upgrade({
         plan: targetPlan.stripePlanName,
         successUrl: `${window.location.origin}/dashboard?checkout=success`,
@@ -109,7 +155,6 @@ export function PricingSection() {
 
       if (error) {
         if (error.status === 401 || error.status === 403) {
-          toast.error("Please sign in to upgrade");
           router.push("/sign-in");
         } else {
           throw new Error(error.message || "Failed to start checkout");
@@ -117,12 +162,14 @@ export function PricingSection() {
       } else if (data?.url) {
         window.location.href = data.url;
       } else {
-        toast.error("Failed to start checkout process. Please try again.");
+        setCheckoutIssue({
+          title: "Unable to start checkout",
+          description:
+            "Stripe did not return a checkout URL. Please try again.",
+        });
       }
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Something went wrong.";
-      toast.error(message);
+      openCheckoutIssueDialog(error);
     } finally {
       setLoadingPlan(null);
     }
@@ -197,6 +244,16 @@ export function PricingSection() {
           </PricingCard.Card>
         ))}
       </div>
+
+      <CheckoutIssueDialog
+        issue={checkoutIssue}
+        open={!!checkoutIssue}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCheckoutIssue(null);
+          }
+        }}
+      />
     </section>
   );
 }

@@ -3,15 +3,12 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { admin } from "better-auth/plugins";
-import Stripe from "stripe";
+import type Stripe from "stripe";
 import { env } from "@/config/env";
 import { getStripeSubscriptionPlans } from "@/lib/billing/plan";
 import { syncSubscriptionSnapshotFromStripe } from "@/lib/billing/stripe";
+import { stripeClient } from "@/lib/stripe";
 import prisma from "./prisma";
-
-const stripeClient = new Stripe(env.STRIPE_SECRET_KEY, {
-  apiVersion: "2026-04-22.dahlia",
-});
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {

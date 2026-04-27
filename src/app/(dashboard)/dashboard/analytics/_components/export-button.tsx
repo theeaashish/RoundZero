@@ -2,7 +2,9 @@
 
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import { Download, Loader2 } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { UpgradePlanDialog } from "@/components/upgrade-plan-dialog";
 import type { AnalyticsData, Period } from "../_hooks/useAnalytics";
 import { AnalyticsReportPDF } from "./analytics-pdf-report";
 
@@ -10,6 +12,7 @@ interface ExportButtonProps {
   data?: AnalyticsData;
   isLoading: boolean;
   period: Period;
+  canExport: boolean;
 }
 
 const getPeriodLabel = (period: Period) => {
@@ -27,15 +30,45 @@ const getPeriodLabel = (period: Period) => {
   }
 };
 
-export function ExportButton({ data, isLoading, period }: ExportButtonProps) {
+export function ExportButton({
+  data,
+  isLoading,
+  period,
+  canExport,
+}: ExportButtonProps) {
   const isClient = typeof window !== "undefined";
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
 
-  if (!isClient || isLoading || !data || !data.canExport) {
+  if (!isClient || isLoading) {
     return (
       <Button variant="outline" size="sm" disabled>
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
         Export
       </Button>
+    );
+  }
+
+  if (!data || !canExport) {
+    return (
+      <>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowUpgradeDialog(true)}
+        >
+          <Download className="mr-2 h-4 w-4" />
+          Upgrade to export
+        </Button>
+
+        <UpgradePlanDialog
+          open={showUpgradeDialog}
+          onOpenChange={setShowUpgradeDialog}
+          title="Unlock analytics export"
+          description="PDF analytics export is available on Pro and Elite plans."
+          detail="Upgrade your plan to download polished analytics reports for review, coaching, or interview prep tracking."
+          ctaLabel="Open billing"
+        />
+      </>
     );
   }
 

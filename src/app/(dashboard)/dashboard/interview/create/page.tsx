@@ -51,6 +51,8 @@ import { FormStepper } from "./_components/FormStepper";
 import { ResumeSelectionDialog } from "./_components/ResumeSelectionDialog";
 import { StepCompanyContext } from "./_components/StepCompanyContext";
 
+type CreateInterviewFormValues = typeof createInterviewSchema._input;
+
 // Hoisted static data outside component (rendering-hoist-jsx, rerender-memo-with-default-value)
 const interviewTypes = [
   {
@@ -95,14 +97,14 @@ export default function CreateInterviewPage() {
 
   const router = useRouter();
 
-  const form = useForm({
+  const form = useForm<CreateInterviewFormValues>({
     resolver: zodResolver(createInterviewSchema),
     defaultValues: {
       jobTitle: "",
       resumeText: "",
-      includeDSA: false,
-      type: "TECHNICAL" as const,
-      experienceLevel: "mid" as const,
+      includeDSA: false as boolean,
+      type: "TECHNICAL",
+      experienceLevel: "mid",
       techStack: "",
       companyName: "",
       jobDescription: "",
@@ -146,9 +148,11 @@ export default function CreateInterviewPage() {
     },
   });
 
-  function onSubmit(values: CreateInterviewSchemaType) {
+  function onSubmit(values: CreateInterviewFormValues) {
+    const parsedValues = createInterviewSchema.parse(values);
+
     createInterview({
-      ...values,
+      ...parsedValues,
       resumeKey: resumeKey || undefined,
       resumeFilename: resumeFilename || undefined,
       resumeId: resumeId || undefined,
