@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ArrowRight,
@@ -20,6 +20,7 @@ import { useCallback, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { ResumeUploader } from "@/components/file-uploader/Uploader";
+import { UpgradePlanDialog } from "@/components/upgrade-plan-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,7 +42,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { orpcClient } from "@/lib/orpc-client";
+import { orpc, orpcClient } from "@/lib/orpc-client";
 import {
   type CreateInterviewSchemaType,
   createInterviewSchema,
@@ -94,6 +95,13 @@ export default function CreateInterviewPage() {
   const [resumeFilename, setResumeFilename] = useState<string | null>(null);
   const [resumeId, setResumeId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
+
+  const { data: billingData } = useQuery(
+    orpc.billing.getState.queryOptions({
+      input: {},
+    }),
+  );
 
   const router = useRouter();
 
@@ -149,6 +157,15 @@ export default function CreateInterviewPage() {
   });
 
   function onSubmit(values: CreateInterviewFormValues) {
+    if (
+      billingData &&
+      !billingData.usage.isUnlimited &&
+      (billingData.usage.remaining ?? 0) <= 0
+    ) {
+      setShowUpgradeDialog(true);
+      return;
+    }
+
     const parsedValues = createInterviewSchema.parse(values);
 
     createInterview({
@@ -611,6 +628,15 @@ export default function CreateInterviewPage() {
           </form>
         </Form>
       </div>
+
+      <UpgradePlanDialog
+        open={showUpgradeDialog}
+        onOpenChange={setShowUpgradeDialog}
+        title="Interview limit reached"
+        description="You've used all your interview credits for this period."
+        detail="Upgrade your plan to get unlimited interviews and keep practicing with AI-powered feedback."
+        ctaLabel="Open billing"
+      />
     </div>
   );
 }
