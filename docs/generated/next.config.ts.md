@@ -1,31 +1,31 @@
 # Next.js Configuration (`next.config.ts`)
 
-The `next.config.ts` file serves as the central configuration hub for the Next.js application. It is optimized for performance, developer experience, and strict type safety.
+The `next.config.ts` file serves as the central configuration hub for the Next.js application. It is optimized for performance, bundle size reduction, and robust integration with external services.
 
 ## Key Features
 
 ### 1. Performance & Optimization
-*   **Bundle Size Optimization:** Uses `experimental.optimizePackageImports` to automatically tree-shake and import only the necessary components from heavy libraries (e.g., `lucide-react`, `framer-motion`, and various `@radix-ui` primitives). This prevents large bundle sizes caused by barrel file imports.
-*   **Server-Side Performance:** The `serverExternalPackages` configuration ensures that heavy dependencies (like `prisma`, `pg`, and PDF processing libraries) are treated as external, optimizing server-side execution and cold starts.
-*   **React Compiler:** Enabled (`reactCompiler: true`) to leverage automatic memoization, reducing the need for manual `useMemo` and `useCallback` hooks.
+*   **React Compiler:** Enabled (`reactCompiler: true`) to leverage automatic memoization and performance improvements.
+*   **Bundle Size Optimization:** Uses `experimental.optimizePackageImports` to prevent large barrel file imports. This ensures that only the specific components used from libraries like `lucide-react`, `framer-motion`, and `@radix-ui` are included in the final bundle.
+*   **Server-Side Performance:** Configures `serverExternalPackages` to ensure heavy dependencies (e.g., `prisma`, `pg`, `mammoth`, `unpdf`) are handled correctly in the server-side environment.
 
-### 2. Developer Experience
-*   **Waterfall Identification:** Configured `logging.fetches` to display full URLs in the console, assisting developers in identifying and debugging network request waterfalls.
-*   **Type Safety:** `typedRoutes` is enabled, providing full TypeScript support for internal application links, reducing runtime navigation errors.
+### 2. Development & Debugging
+*   **Waterfall Identification:** Configures `logging.fetches` to display full URLs in the console, assisting developers in identifying and eliminating network request waterfalls.
 
 ### 3. Image Handling
-The application is configured to allow remote images from trusted social authentication providers to support user profile avatars:
-*   `lh3.googleusercontent.com` (Google)
-*   `avatars.githubusercontent.com` (GitHub)
+*   **Remote Patterns:** Configures `images.remotePatterns` to allow image loading from trusted external sources, specifically:
+    *   `lh3.googleusercontent.com` (Google profile pictures)
+    *   `avatars.githubusercontent.com` (GitHub profile pictures)
 
-## Configuration Summary
+## Configuration Breakdown
 
-| Feature | Setting | Purpose |
+| Category | Setting | Purpose |
 | :--- | :--- | :--- |
-| **React Compiler** | `true` | Automatic component memoization. |
-| **Typed Routes** | `true` | Compile-time link validation. |
-| **Logging** | `fetches.fullUrl: true` | Debugging network performance. |
-| **Image Domains** | Google/GitHub | Allow-listing for social auth avatars. |
+| **Compiler** | `reactCompiler` | Enables automatic React performance optimizations. |
+| **Server** | `serverExternalPackages` | Prevents bundling of heavy server-side libraries. |
+| **Logging** | `logging.fetches` | Improves visibility into network requests for debugging. |
+| **Images** | `remotePatterns` | Whitelists domains for `next/image` optimization. |
+| **Bundling** | `optimizePackageImports` | Reduces bundle size by tree-shaking large UI libraries. |
 
 ## Usage
-This configuration is automatically consumed by the Next.js build process. No manual invocation is required. When adding new heavy UI libraries, ensure they are added to the `optimizePackageImports` array to maintain optimal bundle performance.
+This configuration is automatically consumed by the Next.js build process. To add new external packages or whitelist new image domains, update the respective arrays within the `nextConfig` object.
