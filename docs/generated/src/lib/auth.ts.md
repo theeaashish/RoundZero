@@ -6,16 +6,13 @@ The `auth.ts` file serves as the central authentication configuration for the ap
 
 This module initializes the `betterAuth` instance, configuring how users authenticate, how their sessions are managed, and how their subscription status is synchronized with Stripe.
 
-## Key Components
+## Key Features
 
-### 1. Configuration
-*   **Database:** Uses `prismaAdapter` with PostgreSQL to persist user data and sessions.
-*   **Authentication Methods:**
-    *   **Email/Password:** Disabled.
-    *   **Social Providers:** Google and GitHub are enabled using environment variables.
-    *   **Account Linking:** Enabled for trusted providers (Google/GitHub), allowing users to merge accounts.
-*   **Session Management:** Sessions expire after 7 days, with a rolling update interval of 24 hours.
-*   **User Schema:** Extends the base user model with custom fields: `role`, `banned`, `banReason`, and `banExpires`.
+### 1. Authentication & Security
+*   **Social Providers:** Supports Google and GitHub authentication.
+*   **Account Linking:** Enabled for trusted providers, allowing users to link multiple social accounts to a single identity.
+*   **Session Management:** Configured for a 7-day expiration with a 24-hour update interval.
+*   **Custom User Schema:** Extends the base user model with fields for `role`, `banned` status, `banReason`, and `banExpires`.
 
 ### 2. Plugins
 *   **`nextCookies`:** Handles cookie-based session management for Next.js.
@@ -34,19 +31,23 @@ This module initializes the `betterAuth` instance, configuring how users authent
 | `UserRole` | `Union` | Defines valid user roles (`"user" \| "admin"`). |
 | `Session` | `Type` | The inferred type for the application's session object. |
 
-## Usage
+## Usage Example
 
-To use the authentication instance in your application (e.g., in API routes or Server Components):
+To use the authentication instance in your application (e.g., in API routes or server components):
 
 ```typescript
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 
-// Example: Getting the current session
-const session = await auth.api.getSession({
-  headers: await headers(),
-});
+async function getSession() {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+  return session;
+}
 ```
 
-### Subscription Handling
-The Stripe integration is fully automated. When a subscription event occurs (e.g., a user upgrades their plan), the `onEvent` and `onSubscriptionComplete` hooks trigger `syncSubscriptionSnapshotFromStripe`, ensuring the local database reflects the current state of the Stripe subscription without manual intervention.
+## Dependencies
+*   **Database:** Uses `prismaAdapter` with a PostgreSQL provider.
+*   **Environment:** Relies on `env` for sensitive credentials (Google/GitHub keys, Stripe secrets).
+*   **Billing:** Integrates with local billing utilities (`@/lib/billing/*`) to ensure data consistency between Stripe and the local database.
