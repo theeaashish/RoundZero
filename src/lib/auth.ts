@@ -92,29 +92,4 @@ export const auth = betterAuth({
 
 export type Auth = typeof auth;
 export type UserRole = "user" | "admin";
-
-export interface Session {
-  user: {
-    id: string;
-    email: string;
-    name: string | null;
-    image: string | null;
-    emailVerified: boolean;
-    role: UserRole;
-    banned: boolean | null;
-    banReason: string | null;
-    banExpires: number | null;
-    createdAt: Date;
-    updatedAt: Date;
-  };
-  session: {
-    id: string;
-    userId: string;
-    expiresAt: Date;
-    token: string;
-    ipAddress: string | null;
-    userAgent: string | null;
-    createdAt: Date;
-    updatedAt: Date;
-  };
-}
+export type Session = typeof auth.$Infer.Session;
