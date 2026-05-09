@@ -32,9 +32,6 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // Stable top-level properties in Next.js 15+
-  typedRoutes: true,
-
   experimental: {
     // Rule 2: Bundle Size Optimization (Avoid Barrel File Imports)
     // This is still in experimental in some versions/types

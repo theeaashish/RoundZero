@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
@@ -24,7 +25,7 @@ export default async function AuthPage({
     "/dashboard";
 
   if (session) {
-    redirect(redirectUrl);
+    redirect(redirectUrl as Route);
   }
 
   return (
