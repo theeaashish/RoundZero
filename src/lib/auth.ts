@@ -2,7 +2,7 @@ import { stripe } from "@better-auth/stripe";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
-import { admin } from "better-auth/plugins";
+import { admin } from "better-auth/plugins/admin";
 import type Stripe from "stripe";
 import { env } from "@/config/env";
 import { getStripeSubscriptionPlans } from "@/lib/billing/plan";
