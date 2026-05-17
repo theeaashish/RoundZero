@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, Search } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DESIGN_NODES,
@@ -44,6 +44,15 @@ export function NodeSidebar() {
       )
     : DESIGN_NODES;
 
+  // Optimized from O(c × n) per render to O(n) single-pass by pre-grouping nodes by category in a Map
+  const groupedNodes = useMemo(() => {
+    const groups: Record<string, DesignNode[]> = {};
+    for (const node of filteredNodes) {
+      (groups[node.category] ??= []).push(node);
+    }
+    return groups;
+  }, [filteredNodes]);
+
   return (
     <aside className="w-80 shrink-0 border-r border-border/40 bg-card/30 backdrop-blur-xl p-0 flex flex-col h-screen max-h-[calc(100vh-4rem)] overflow-hidden shadow-2xl">
       <div className="shrink-0 p-6 pb-4 space-y-3 border-b border-border/10 bg-background/5">
@@ -72,9 +81,7 @@ export function NodeSidebar() {
         <ScrollArea className="h-full">
           <div className="px-6 py-6 space-y-6 pb-24">
             {NODE_CATEGORIES.map((category) => {
-              const categoryNodes = filteredNodes.filter(
-                (node) => node.category === category.id,
-              );
+              const categoryNodes = groupedNodes[category.id] ?? [];
               const CategoryIcon = category.icon;
 
               if (categoryNodes.length === 0) return null;

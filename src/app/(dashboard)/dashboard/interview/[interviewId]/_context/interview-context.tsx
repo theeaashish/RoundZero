@@ -132,9 +132,10 @@ const mergeMessage = (
     return [...messages, nextMessage];
   }
 
-  return messages.map((message, index) =>
-    index === existingIndex ? nextMessage : message,
-  );
+  // Optimized from O(2n) (findIndex + map) to O(n) single-pass by replacing via copy-with-index instead of mapping all elements
+  const next = messages.slice();
+  next[existingIndex] = nextMessage;
+  return next;
 };
 
 interface SendMessageOptions {

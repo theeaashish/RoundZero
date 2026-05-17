@@ -14,9 +14,10 @@ import {
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
+  useOnSelectionChange,
   useReactFlow,
 } from "@xyflow/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "@xyflow/react/dist/style.css";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { Node, NodeTypes } from "@xyflow/react";
@@ -68,7 +69,7 @@ function ArenaInner({ problemId }: { problemId: string }) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<
     Edge<ArchitectureEdgeData>
   >([]);
-  const { screenToFlowPosition, getNodes, getEdges, fitView } = useReactFlow<
+  const { screenToFlowPosition, getNodes, getEdges, fitView, updateNodeData, updateEdgeData } = useReactFlow<
     Node<ArchitectureNodeData>,
     Edge<ArchitectureEdgeData>
   >();
@@ -126,8 +127,16 @@ function ArenaInner({ problemId }: { problemId: string }) {
     setTimeout(() => fitView({ padding: 0.2 }), 50);
   }, [attempt, fitView, setEdges, setNodes]);
 
-  const selectedNode = nodes.find((node) => node.selected) ?? null;
-  const selectedEdge = edges.find((edge) => edge.selected) ?? null;
+  // Optimized from O(n) per render to O(1) by subscribing to XYFlow's internal selection change events
+  const [selectedNode, setSelectedNode] = useState<Node<ArchitectureNodeData> | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<Edge<ArchitectureEdgeData> | null>(null);
+
+  useOnSelectionChange({
+    onChange: useCallback(({ nodes: selectedNodes, edges: selectedEdges }) => {
+      setSelectedNode((selectedNodes[0] as Node<ArchitectureNodeData>) ?? null);
+      setSelectedEdge((selectedEdges[0] as Edge<ArchitectureEdgeData>) ?? null);
+    }, []),
+  });
 
   const serializedCanvas = useMemo(
     () => JSON.stringify({ nodes, edges }),
@@ -258,38 +267,16 @@ function ArenaInner({ problemId }: { problemId: string }) {
     nodeId: string,
     updates: Partial<ArchitectureNodeData>,
   ) => {
-    setNodes((currentNodes) =>
-      currentNodes.map((node) =>
-        node.id === nodeId
-          ? {
-              ...node,
-              data: {
-                ...node.data,
-                ...updates,
-              },
-            }
-          : node,
-      ),
-    );
+    // Optimized from O(n) map+spread to O(1) via XYFlow's internal Map-based node lookup
+    updateNodeData(nodeId, updates);
   };
 
   const updateEdge = (
     edgeId: string,
     updates: Partial<ArchitectureEdgeData>,
   ) => {
-    setEdges((currentEdges) =>
-      currentEdges.map((edge) =>
-        edge.id === edgeId
-          ? {
-              ...edge,
-              data: {
-                ...normalizeArchitectureEdgeData(edge.data),
-                ...updates,
-              },
-            }
-          : edge,
-      ),
-    );
+    // Optimized from O(n) map+spread to O(1) via XYFlow's internal Map-based edge lookup
+    updateEdgeData(edgeId, updates);
   };
 
   const handleEvaluate = () => {
