@@ -8,12 +8,10 @@ import { HowItWorks } from "./_components/how-it-works";
 import { Navbar } from "./_components/navbar";
 import { Pricing } from "./_components/pricing";
 import { SampleReport } from "./_components/sample-report";
-import { StatsSection } from "./_components/stats-section";
-import { Testimonials } from "./_components/testimonials";
 import { TrustBar } from "./_components/trust-bar";
 
 export const metadata = {
-  title: "Interview AI - Master Your Interview Skills",
+  title: "RoundZero - Master Your Interview Skills",
   description:
     "Practice interviews with AI-powered feedback. Improve your responses, get real-time analysis, and ace your next interview.",
 };
@@ -43,9 +41,7 @@ export default function Home() {
         <HowItWorks />
         <SampleReport />
         <Comparison />
-        <StatsSection />
         <AudioSamples />
-        <Testimonials />
         <Pricing />
         <FAQ />
       </main>

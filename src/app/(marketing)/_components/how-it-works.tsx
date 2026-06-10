@@ -94,29 +94,25 @@ export function HowItWorks() {
               viewport={{ once: true }}
               transition={{ delay: feature.delay, duration: 0.6 }}
             >
-              <div className="relative h-full rounded-3xl border border-border/50 bg-card/30 backdrop-blur-sm p-8 lg:p-10 hover:border-border hover:bg-card/50 transition-all duration-500 overflow-hidden shimmer-border">
+              <div className="relative h-full rounded-xl border border-zinc-200/80 bg-zinc-50/50 p-8 lg:p-10 hover:border-zinc-300 hover:bg-zinc-100/50 dark:border-border/50 dark:bg-[#0d0d0d] dark:hover:border-border dark:hover:bg-[#101111] transition-all duration-500 overflow-hidden">
                 {/* Step number watermark */}
-                <div className="absolute top-6 right-6 lg:top-8 lg:right-8 text-7xl lg:text-8xl font-bold text-muted-foreground/6 select-none">
+                <div className="absolute top-6 right-6 lg:top-8 lg:right-8 text-7xl lg:text-8xl font-bold text-muted-foreground/5 select-none font-mono">
                   {feature.step}
                 </div>
 
                 {/* Gradient background on hover */}
-                <div
-                  className={`absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500`}
-                />
+                <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
                 <div className="relative">
                   {/* Icon */}
-                  <div
-                    className={`inline-flex p-4 rounded-2xl bg-primary/10 mb-6 group-hover:scale-110 transition-transform duration-300`}
-                  >
-                    <feature.icon className={`h-7 w-7 text-primary`} />
+                  <div className="inline-flex p-4 rounded-lg bg-primary/10 mb-6 group-hover:scale-110 transition-transform duration-300">
+                    <feature.icon className="h-7 w-7 text-primary" />
                   </div>
 
-                  <h3 className="text-xl lg:text-2xl font-semibold mb-4">
+                  <h3 className="text-xl lg:text-2xl font-semibold mb-4 font-heading">
                     {feature.title}
                   </h3>
-                  <p className="text-muted-foreground leading-relaxed text-base lg:text-lg">
+                  <p className="text-muted-foreground leading-relaxed text-base lg:text-lg font-body">
                     {feature.description}
                   </p>
 

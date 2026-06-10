@@ -22,7 +22,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  createInterviewSchema,
+  type createInterviewSchema,
   FIELD_LIMITS,
 } from "@/lib/zodSchemas/createInterview";
 

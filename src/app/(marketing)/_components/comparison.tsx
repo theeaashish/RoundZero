@@ -103,7 +103,7 @@ export function Comparison() {
         </motion.div>
 
         <motion.div
-          className="overflow-hidden rounded-3xl border border-border/50 bg-card/30 backdrop-blur-sm shadow-xl"
+          className="overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50/50 dark:border-border/50 dark:bg-[#0d0d0d] backdrop-blur-sm"
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}

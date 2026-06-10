@@ -20,7 +20,6 @@ import { useCallback, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { ResumeUploader } from "@/components/file-uploader/Uploader";
-import { UpgradePlanDialog } from "@/components/upgrade-plan-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +41,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { UpgradePlanDialog } from "@/components/upgrade-plan-dialog";
 import { orpc, orpcClient } from "@/lib/orpc-client";
 import {
   type CreateInterviewSchemaType,

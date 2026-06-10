@@ -71,10 +71,10 @@ export function Footer() {
               Join thousands of candidates who've transformed their interview
               performance with RoundZero.
             </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5">
               <Button
                 size="lg"
-                className="h-14 px-8 text-base font-semibold shadow-2xl shadow-primary/30 hover:shadow-primary/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 group"
+                className="h-12 px-6 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/95 transition-all duration-200 group w-full sm:w-auto"
                 asChild
               >
                 <Link href="/sign-in">
@@ -85,7 +85,7 @@ export function Footer() {
               <Button
                 size="lg"
                 variant="outline"
-                className="h-14 px-8 text-base font-semibold border-border/50 hover:border-border"
+                className="h-12 px-6 text-sm font-semibold rounded-lg border border-border/60 hover:bg-accent hover:text-accent-foreground w-full sm:w-auto group backdrop-blur-sm bg-background/30"
                 asChild
               >
                 <Link href="#demo">Schedule a demo</Link>

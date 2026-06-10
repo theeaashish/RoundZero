@@ -120,7 +120,7 @@ export function AudioSamples() {
               viewport={{ once: true }}
               transition={{ delay: i * 0.1, duration: 0.6 }}
             >
-              <div className="relative rounded-3xl border border-border/50 bg-card/30 backdrop-blur-sm p-8 hover:border-border hover:bg-card/50 transition-all duration-500 text-center overflow-hidden shimmer-border">
+              <div className="relative rounded-xl border border-zinc-200 bg-card/30 backdrop-blur-sm p-8 hover:border-zinc-300 hover:bg-card/50 dark:border-border/50 dark:hover:border-border transition-all duration-500 text-center overflow-hidden shimmer-border">
                 {/* Background gradient */}
                 <div
                   className={`absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500`}

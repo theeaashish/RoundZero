@@ -69,10 +69,14 @@ function ArenaInner({ problemId }: { problemId: string }) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<
     Edge<ArchitectureEdgeData>
   >([]);
-  const { screenToFlowPosition, getNodes, getEdges, fitView, updateNodeData, updateEdgeData } = useReactFlow<
-    Node<ArchitectureNodeData>,
-    Edge<ArchitectureEdgeData>
-  >();
+  const {
+    screenToFlowPosition,
+    getNodes,
+    getEdges,
+    fitView,
+    updateNodeData,
+    updateEdgeData,
+  } = useReactFlow<Node<ArchitectureNodeData>, Edge<ArchitectureEdgeData>>();
 
   const [showResults, setShowResults] = useState(false);
   const [evaluationResult, setEvaluationResult] =
@@ -128,8 +132,10 @@ function ArenaInner({ problemId }: { problemId: string }) {
   }, [attempt, fitView, setEdges, setNodes]);
 
   // Optimized from O(n) per render to O(1) by subscribing to XYFlow's internal selection change events
-  const [selectedNode, setSelectedNode] = useState<Node<ArchitectureNodeData> | null>(null);
-  const [selectedEdge, setSelectedEdge] = useState<Edge<ArchitectureEdgeData> | null>(null);
+  const [selectedNode, setSelectedNode] =
+    useState<Node<ArchitectureNodeData> | null>(null);
+  const [selectedEdge, setSelectedEdge] =
+    useState<Edge<ArchitectureEdgeData> | null>(null);
 
   useOnSelectionChange({
     onChange: useCallback(({ nodes: selectedNodes, edges: selectedEdges }) => {

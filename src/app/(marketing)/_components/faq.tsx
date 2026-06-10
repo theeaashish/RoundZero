@@ -101,7 +101,7 @@ export function FAQ() {
               >
                 <AccordionItem
                   value={`item-${i}`}
-                  className="border border-border/50 rounded-2xl px-6 bg-card/30 backdrop-blur-sm hover:bg-card/50 transition-all duration-300 data-[state=open]:border-primary/30 data-[state=open]:bg-card/50"
+                  className="border border-zinc-200/80 rounded-xl px-6 bg-zinc-50/50 hover:bg-zinc-100 hover:border-zinc-300 dark:border-border/50 dark:bg-[#0d0d0d] dark:hover:bg-[#101111] transition-all duration-300 data-[state=open]:border-primary/30 data-[state=open]:bg-zinc-100/50 dark:data-[state=open]:bg-[#101111]"
                 >
                   <AccordionTrigger className="text-left hover:no-underline py-6">
                     <span className="text-lg font-semibold pr-4">

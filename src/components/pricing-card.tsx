@@ -5,7 +5,7 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "relative w-full max-w-xs rounded-xl border bg-background p-1",
+        "relative w-full max-w-md rounded-xl border bg-background p-1.5 shadow-xs",
         className,
       )}
       {...props}
@@ -24,7 +24,7 @@ function Header({
   return (
     <div
       className={cn(
-        "relative mb-4 rounded-xl border p-4",
+        "relative mb-4 rounded-xl border p-6 lg:p-8",
         isPopular && "bg-card shadow-xs",
         className,
       )}
@@ -46,7 +46,10 @@ function Plan({ className, ...props }: React.ComponentProps<"div">) {
 
 function Description({ className, ...props }: React.ComponentProps<"p">) {
   return (
-    <p className={cn("text-muted-foreground text-xs", className)} {...props} />
+    <p
+      className={cn("text-muted-foreground text-sm leading-relaxed", className)}
+      {...props}
+    />
   );
 }
 
@@ -54,7 +57,7 @@ function PlanName({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "flex items-center gap-2 font-medium text-sm [&_svg:not([class*='size-'])]:size-4",
+        "flex items-center gap-2.5 font-bold text-base md:text-lg [&_svg:not([class*='size-'])]:size-5",
         className,
       )}
       {...props}
@@ -83,7 +86,10 @@ function Price({ className, ...props }: React.ComponentProps<"div">) {
 function MainPrice({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
-      className={cn("font-extrabold text-3xl tracking-tight", className)}
+      className={cn(
+        "font-extrabold text-4xl lg:text-5xl tracking-tight",
+        className,
+      )}
       {...props}
     />
   );
@@ -92,7 +98,10 @@ function MainPrice({ className, ...props }: React.ComponentProps<"span">) {
 function Period({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
-      className={cn("pb-1 text-muted-foreground text-sm", className)}
+      className={cn(
+        "pb-1.5 text-muted-foreground text-sm md:text-base",
+        className,
+      )}
       {...props}
     />
   );
@@ -111,18 +120,18 @@ function OriginalPrice({ className, ...props }: React.ComponentProps<"span">) {
 }
 
 function Body({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("space-y-6 p-3", className)} {...props} />;
+  return <div className={cn("space-y-6 p-4 lg:p-6", className)} {...props} />;
 }
 
 function List({ className, ...props }: React.ComponentProps<"ul">) {
-  return <ul className={cn("space-y-3", className)} {...props} />;
+  return <ul className={cn("space-y-4", className)} {...props} />;
 }
 
 function ListItem({ className, ...props }: React.ComponentProps<"li">) {
   return (
     <li
       className={cn(
-        "flex items-start gap-3 text-muted-foreground text-sm",
+        "flex items-start gap-3 text-muted-foreground text-sm lg:text-base",
         className,
       )}
       {...props}

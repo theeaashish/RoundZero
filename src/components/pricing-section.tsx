@@ -66,7 +66,19 @@ function getPlanButtonLabel(
   return planId === "pro" ? "Choose Pro" : "Choose Elite";
 }
 
-export function PricingSection() {
+export interface PricingSectionProps {
+  title?: ReactNode;
+  subtitle?: ReactNode;
+  badge?: ReactNode;
+  showBadge?: boolean;
+}
+
+export function PricingSection({
+  title = "Plans that Scale with You",
+  subtitle = "Whether you're just starting out or growing fast, our flexible pricing has you covered.",
+  badge = "Pricing",
+  showBadge = true,
+}: PricingSectionProps = {}) {
   const router = useRouter();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [checkoutIssue, setCheckoutIssue] =
@@ -117,8 +129,16 @@ export function PricingSection() {
   };
 
   const handleCheckout = async (planId: PlanId, href: string) => {
+    if (!session?.user) {
+      const callbackUrl = encodeURIComponent(
+        window.location.pathname + window.location.search,
+      );
+      router.push(`/sign-in?callbackUrl=${callbackUrl}`);
+      return;
+    }
+
     if (planId === "free") {
-      router.push(session?.user ? "/dashboard" : href);
+      router.push("/dashboard");
       return;
     }
 
@@ -177,19 +197,22 @@ export function PricingSection() {
 
   return (
     <section className="w-full">
-      <div className="mx-auto mb-4 max-w-md space-y-2">
-        <div className="flex justify-center">
-          <div className="rounded-md border px-4 py-1 text-sm">Pricing</div>
-        </div>
-        <h2 className="text-center font-bold text-2xl tracking-tight md:text-3xl lg:font-extrabold lg:text-4xl">
-          Plans that Scale with You
+      <div className="mx-auto mb-12 max-w-3xl space-y-4">
+        {showBadge && badge && (
+          <div className="flex justify-center">
+            <div className="rounded-md border px-4 py-1 text-sm">{badge}</div>
+          </div>
+        )}
+        <h2 className="text-center font-bold text-3xl tracking-tight md:text-4xl lg:font-extrabold lg:text-5xl">
+          {title}
         </h2>
-        <p className="text-center text-muted-foreground text-sm md:text-base">
-          Whether you're just starting out or growing fast, our flexible pricing
-          has you covered.
-        </p>
+        {subtitle && (
+          <p className="text-center text-muted-foreground text-sm md:text-base max-w-xl mx-auto">
+            {subtitle}
+          </p>
+        )}
       </div>
-      <div className="mx-auto grid w-full max-w-4xl gap-4 p-6 md:grid-cols-3">
+      <div className="mx-auto grid w-full max-w-6xl gap-6 lg:gap-8 py-8 px-4 sm:px-6 md:grid-cols-3">
         {getPublicPlanConfigs().map((plan, index) => (
           <PricingCard.Card
             className={cn("w-full max-w-full", index === 1 && "md:scale-105")}
@@ -214,7 +237,7 @@ export function PricingSection() {
                 </PricingCard.Period>
               </PricingCard.Price>
               <Button
-                className={cn("w-full font-semibold")}
+                className={cn("w-full h-12 text-sm md:text-base font-semibold")}
                 variant={plan.buttonVariant}
                 disabled={loadingPlan === plan.id || currentPlanId === plan.id}
                 onClick={() => handleCheckout(plan.id, plan.href)}
@@ -231,10 +254,10 @@ export function PricingSection() {
               </PricingCard.Description>
               <PricingCard.List>
                 {plan.features.map((item) => (
-                  <PricingCard.ListItem className="text-xs" key={item}>
+                  <PricingCard.ListItem key={item}>
                     <CheckCircle2
                       aria-hidden="true"
-                      className="size-4 text-foreground"
+                      className="size-5 text-primary shrink-0 mt-0.5"
                     />
                     <span>{item}</span>
                   </PricingCard.ListItem>

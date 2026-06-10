@@ -16,25 +16,22 @@ const companies = [
 
 const stats = [
   {
+    icon: Zap,
+    value: "180ms",
+    label: "Voice latency",
+    sublabel: "Real-time, lag-free conversations",
+  },
+  {
     icon: TrendingUp,
-    value: "+34%",
-    label: "Score improvement",
-    sublabel: "after just 3 sessions",
-    gradient: "from-emerald-500 to-teal-500",
+    value: "STAR",
+    label: "Behavioral rubric",
+    sublabel: "Granular STAR framework evaluation",
   },
   {
     icon: Users,
-    value: "4,800+",
-    label: "Offers landed",
-    sublabel: "at top tech companies",
-    gradient: "from-blue-500 to-cyan-500",
-  },
-  {
-    icon: Zap,
-    value: "180ms",
-    label: "Response time",
-    sublabel: "feels like real conversation",
-    gradient: "from-violet-500 to-purple-500",
+    value: "24/7",
+    label: "On-demand loops",
+    sublabel: "Unlimited practice without scheduling",
   },
 ];
 
@@ -55,7 +52,7 @@ export function TrustBar() {
           transition={{ duration: 0.6 }}
         >
           <p className="text-sm font-medium text-muted-foreground mb-8 uppercase tracking-widest">
-            Trusted by candidates who landed offers at
+            Practice for interviews at top companies
           </p>
 
           <div className="relative">
@@ -67,7 +64,7 @@ export function TrustBar() {
               {companies.map((company, i) => (
                 <motion.span
                   key={company}
-                  className="text-xl lg:text-2xl font-semibold text-muted-foreground/40 hover:text-muted-foreground transition-colors duration-300 cursor-default"
+                  className="text-xl lg:text-2xl font-semibold text-muted-foreground/40 hover:text-muted-foreground transition-colors duration-300 cursor-default font-heading"
                   initial={{ opacity: 0 }}
                   whileInView={{ opacity: 1 }}
                   viewport={{ once: true }}
@@ -92,20 +89,16 @@ export function TrustBar() {
               viewport={{ once: true }}
               transition={{ delay: 0.2 + i * 0.1, duration: 0.6 }}
             >
-              <div className="relative p-8 rounded-2xl border border-border/50 bg-card/30 backdrop-blur-sm hover:border-border hover:bg-card/50 transition-all duration-500 shimmer-border overflow-hidden">
+              <div className="relative p-8 rounded-xl border border-zinc-200/80 bg-zinc-50/50 hover:border-zinc-300 hover:bg-zinc-100/50 dark:border-border/50 dark:bg-[#0d0d0d] dark:hover:border-border dark:hover:bg-[#101111] transition-all duration-500 overflow-hidden">
                 {/* Background gradient on hover */}
-                <div
-                  className={`absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500`}
-                />
+                <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
                 <div className="relative">
-                  <div
-                    className={`inline-flex p-3 rounded-xl bg-primary/10 mb-4`}
-                  >
-                    <stat.icon className="h-6 w-6 text-foreground" />
+                  <div className="inline-flex p-3 rounded-lg bg-primary/10 mb-4">
+                    <stat.icon className="h-6 w-6 text-primary" />
                   </div>
 
-                  <p className="text-4xl lg:text-5xl font-bold text-foreground mb-2 tracking-tight">
+                  <p className="text-4xl lg:text-5xl font-bold text-foreground mb-2 tracking-tight font-heading">
                     {stat.value}
                   </p>
                   <p className="text-base font-semibold text-foreground mb-1">
