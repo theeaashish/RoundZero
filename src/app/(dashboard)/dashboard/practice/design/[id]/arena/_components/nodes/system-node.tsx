@@ -1,6 +1,5 @@
-"use client";
-
-import { Handle, type Node, type NodeProps, Position } from "@xyflow/react";
+import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
+import { memo } from "react";
 import type { ArchitectureNodeData } from "@/lib/architecture-types";
 import { DESIGN_NODES, NODE_CATEGORIES } from "@/lib/design-nodes";
 import { cn } from "@/lib/utils";
@@ -108,14 +107,14 @@ function getNodeIcon(nodeType: string) {
 const HANDLE_BASE =
   "!h-2.5 !w-2.5 !border-2 !border-background !bg-primary/60 !transition-all hover:!bg-primary hover:!scale-125";
 
-export function SystemNode({ data, selected }: NodeProps<CustomNode>) {
+function SystemNodeComponent({ data, selected }: NodeProps<CustomNode>) {
   const colors = getNodeColor(data.type);
   const Icon = getNodeIcon(data.type);
 
   return (
     <div
       className={cn(
-        "group relative flex min-w-[160px] max-w-[200px] flex-col items-center justify-center gap-2.5 rounded-xl border bg-card px-5 py-4 transition-all duration-200",
+        "group relative flex min-w-40 max-w-50 flex-col items-center justify-center gap-2.5 rounded-xl border bg-card px-5 py-4 transition-all duration-200",
         selected
           ? `border-primary/60 shadow-lg ${colors.glow} ring-1 ring-primary/40`
           : "border-border/50 shadow-sm hover:border-primary/40 hover:shadow-md",
@@ -182,3 +181,19 @@ export function SystemNode({ data, selected }: NodeProps<CustomNode>) {
     </div>
   );
 }
+
+export const SystemNode = memo(SystemNodeComponent, (prevProps, nextProps) => {
+  return (
+    prevProps.selected === nextProps.selected &&
+    prevProps.dragging === nextProps.dragging &&
+    prevProps.data.label === nextProps.data.label &&
+    prevProps.data.type === nextProps.data.type &&
+    prevProps.data.technology === nextProps.data.technology &&
+    prevProps.data.details === nextProps.data.details &&
+    prevProps.data.instances === nextProps.data.instances &&
+    prevProps.data.deploymentTier === nextProps.data.deploymentTier &&
+    prevProps.data.criticality === nextProps.data.criticality &&
+    prevProps.data.capacity === nextProps.data.capacity &&
+    prevProps.data.notes === nextProps.data.notes
+  );
+});

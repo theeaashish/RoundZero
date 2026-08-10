@@ -1,5 +1,3 @@
-"use client";
-
 import {
   BaseEdge,
   type Edge,
@@ -9,16 +7,19 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import { X } from "lucide-react";
-import { useCallback, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export type DataFlowEdgeData = {
   label?: string;
+  protocol?: string;
+  flowType?: string;
+  notes?: string;
 };
 
-type DataFlowEdge = Edge<DataFlowEdgeData, "dataFlowEdge">;
+type DataFlowEdgeType = Edge<DataFlowEdgeData, "dataFlowEdge">;
 
-export function DataFlowEdge({
+function DataFlowEdgeComponent({
   id,
   sourceX,
   sourceY,
@@ -30,7 +31,7 @@ export function DataFlowEdge({
   markerEnd,
   selected,
   data,
-}: EdgeProps<DataFlowEdge>) {
+}: EdgeProps<DataFlowEdgeType>) {
   const { setEdges } = useReactFlow();
   const [hovered, setHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -120,6 +121,7 @@ export function DataFlowEdge({
             />
           ) : (
             <button
+              type="button"
               onClick={() => setIsEditing(true)}
               className={cn(
                 "flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium transition-all cursor-pointer",
@@ -138,6 +140,7 @@ export function DataFlowEdge({
           {/* Delete button */}
           {(hovered || selected) && !isEditing && (
             <button
+              type="button"
               onClick={onDelete}
               className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full border border-border/60 bg-background shadow-sm transition-colors hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive cursor-pointer"
             >
@@ -149,3 +152,23 @@ export function DataFlowEdge({
     </>
   );
 }
+
+export const DataFlowEdge = memo(
+  DataFlowEdgeComponent,
+  (prevProps, nextProps) => {
+    return (
+      prevProps.id === nextProps.id &&
+      prevProps.selected === nextProps.selected &&
+      prevProps.sourceX === nextProps.sourceX &&
+      prevProps.sourceY === nextProps.sourceY &&
+      prevProps.targetX === nextProps.targetX &&
+      prevProps.targetY === nextProps.targetY &&
+      prevProps.sourcePosition === nextProps.sourcePosition &&
+      prevProps.targetPosition === nextProps.targetPosition &&
+      prevProps.data?.label === nextProps.data?.label &&
+      prevProps.data?.protocol === nextProps.data?.protocol &&
+      prevProps.data?.flowType === nextProps.data?.flowType &&
+      prevProps.data?.notes === nextProps.data?.notes
+    );
+  },
+);
