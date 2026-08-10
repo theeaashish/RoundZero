@@ -121,7 +121,7 @@ const TOPIC_CHIPS = [
   },
 ] as const;
 
-const defaultGenerationValues: z.infer<typeof problemGenerationInputSchema> = {
+const defaultGenerationValues: z.input<typeof problemGenerationInputSchema> = {
   topic: "",
   prompt: "",
   domain: "DATA",
@@ -196,7 +196,11 @@ export default function NewDesignProblemPage() {
   const [generated, setGenerated] =
     useState<GeneratedSystemDesignProblem | null>(null);
 
-  const genForm = useForm<z.infer<typeof problemGenerationInputSchema>>({
+  const genForm = useForm<
+    z.input<typeof problemGenerationInputSchema>,
+    undefined,
+    z.infer<typeof problemGenerationInputSchema>
+  >({
     resolver: zodResolver(problemGenerationInputSchema),
     defaultValues: defaultGenerationValues,
   });
@@ -287,7 +291,7 @@ export default function NewDesignProblemPage() {
           </div>
         </div>
       ) : (
-        <section className="rounded-[28px] border bg-gradient-to-br from-background via-background to-primary/5 p-8 shadow-sm">
+        <section className="rounded-[28px] border bg-linear-to-br from-background via-background to-primary/5 p-8 shadow-sm">
           <div className="mx-auto max-w-5xl space-y-8">
             <div className="space-y-3 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
@@ -597,7 +601,7 @@ export default function NewDesignProblemPage() {
                       <EditableStringList
                         label="Functional Focus"
                         description="Product capabilities to emphasize."
-                        values={genForm.watch("functionalFocus")}
+                        values={genForm.watch("functionalFocus") ?? []}
                         onChange={(values) =>
                           genForm.setValue("functionalFocus", values, {
                             shouldValidate: true,
@@ -612,7 +616,7 @@ export default function NewDesignProblemPage() {
                       <EditableStringList
                         label="Non-Functional Focus"
                         description="Constraints to emphasize during review."
-                        values={genForm.watch("nonFunctionalFocus")}
+                        values={genForm.watch("nonFunctionalFocus") ?? []}
                         onChange={(values) =>
                           genForm.setValue("nonFunctionalFocus", values, {
                             shouldValidate: true,
