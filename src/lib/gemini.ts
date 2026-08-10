@@ -155,33 +155,52 @@ export const generateSystemDesignProblem = async (
 Generate a realistic interview problem that is internally consistent, specific, and solvable in the requested interview duration.
 
 Requirements:
-- Respect the requested domain, seniority, complexity, scale assumptions, and constraints.
+- Respect the requested topic, domain, seniority, complexity, scale assumptions, and constraints.
+- If specific scale numbers (DAU, RPS, latency SLOs), scenarios, or focus areas are omitted or empty, invent realistic, production-grade scale targets and context appropriate for a top-tier tech company system design interview.
 - Use realistic product language and operational numbers.
 - Keep the prompt interview-friendly: clear scope, explicit tradeoffs, and meaningful follow-up questions.
 - Ensure the evaluation rubric aligns with the problem statement.
 - Do not repeat the user's brief verbatim; transform it into a polished company-grade challenge.`;
 
-  const prompt = `# Challenge Configuration
-- Topic: ${input.topic}
-- Domain: ${input.domain}
-- Complexity: ${input.complexity}
-- Interview Role: ${input.interviewRole}
-- Interview Duration: ${input.estimatedDurationMinutes} minutes
-- Product Stage: ${input.productStage}
-- Scenario: ${input.scenario}
-- Functional Focus: ${input.functionalFocus.join("; ")}
-- Non-Functional Focus: ${input.nonFunctionalFocus.join("; ")}
-- Daily Active Users: ${input.dailyActiveUsers}
-- Peak Requests Per Second: ${input.peakRequestsPerSecond}
-- Read/Write Ratio: ${input.readWriteRatio}
-- Latency Target: ${input.latencyTarget}
-- Availability Target: ${input.availabilityTarget}
-- Primary Regions: ${input.primaryRegions.join(", ")}
-- Consistency Model: ${input.consistencyModel}
-- Budget: ${input.budget}
-- Compliance: ${input.compliance.join(", ") || "None"}
+  const promptDetails = [
+    `- Topic: ${input.topic}`,
+    input.prompt ? `- Additional Context/Prompt: ${input.prompt}` : null,
+    `- Domain: ${input.domain}`,
+    `- Complexity: ${input.complexity}`,
+    `- Interview Role: ${input.interviewRole}`,
+    `- Interview Duration: ${input.estimatedDurationMinutes} minutes`,
+    `- Product Stage: ${input.productStage}`,
+    input.scenario ? `- Scenario: ${input.scenario}` : null,
+    input.functionalFocus?.length
+      ? `- Functional Focus: ${input.functionalFocus.join("; ")}`
+      : null,
+    input.nonFunctionalFocus?.length
+      ? `- Non-Functional Focus: ${input.nonFunctionalFocus.join("; ")}`
+      : null,
+    input.dailyActiveUsers
+      ? `- Daily Active Users: ${input.dailyActiveUsers}`
+      : null,
+    input.peakRequestsPerSecond
+      ? `- Peak Requests Per Second: ${input.peakRequestsPerSecond}`
+      : null,
+    input.readWriteRatio ? `- Read/Write Ratio: ${input.readWriteRatio}` : null,
+    input.latencyTarget ? `- Latency Target: ${input.latencyTarget}` : null,
+    input.availabilityTarget
+      ? `- Availability Target: ${input.availabilityTarget}`
+      : null,
+    input.primaryRegions?.length
+      ? `- Primary Regions: ${input.primaryRegions.join(", ")}`
+      : null,
+    `- Consistency Model: ${input.consistencyModel}`,
+    `- Budget: ${input.budget}`,
+    input.compliance?.length
+      ? `- Compliance: ${input.compliance.join(", ")}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
 
-Return a structured output matching the schema exactly.`;
+  const prompt = `# Challenge Configuration\n${promptDetails}\n\nReturn a structured output matching the schema exactly.`;
 
   const { object } = await generateObject({
     model,

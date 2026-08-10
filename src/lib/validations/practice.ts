@@ -97,24 +97,29 @@ export const storedSystemDesignSpecSchema = z.object({
 });
 
 export const problemGenerationInputSchema = z.object({
-  topic: z.string().trim().min(3).max(100),
-  domain: domainSchema,
-  complexity: complexitySchema,
-  interviewRole: interviewRoleSchema,
-  estimatedDurationMinutes: z.number().int().min(30).max(90),
-  productStage: productStageSchema,
-  scenario: nonEmptyString,
-  functionalFocus: z.array(nonEmptyString).min(2).max(8),
-  nonFunctionalFocus: z.array(nonEmptyString).min(2).max(8),
-  dailyActiveUsers: nonEmptyString,
-  peakRequestsPerSecond: nonEmptyString,
-  readWriteRatio: nonEmptyString,
-  latencyTarget: nonEmptyString,
-  availabilityTarget: nonEmptyString,
-  primaryRegions: z.array(nonEmptyString).min(1).max(5),
-  consistencyModel: consistencyModelSchema,
-  budget: budgetLevelSchema,
-  compliance: z.array(nonEmptyString).max(6),
+  topic: z
+    .string()
+    .trim()
+    .min(3, "Topic must be at least 3 characters")
+    .max(100),
+  prompt: z.string().trim().optional(),
+  domain: domainSchema.default("DATA"),
+  complexity: complexitySchema.default("MEDIUM"),
+  interviewRole: interviewRoleSchema.default("SENIOR"),
+  estimatedDurationMinutes: z.number().int().min(30).max(90).default(45),
+  productStage: productStageSchema.default("GROWTH"),
+  scenario: z.string().trim().optional(),
+  functionalFocus: z.array(z.string().trim()).default([]),
+  nonFunctionalFocus: z.array(z.string().trim()).default([]),
+  dailyActiveUsers: z.string().trim().optional(),
+  peakRequestsPerSecond: z.string().trim().optional(),
+  readWriteRatio: z.string().trim().optional(),
+  latencyTarget: z.string().trim().optional(),
+  availabilityTarget: z.string().trim().optional(),
+  primaryRegions: z.array(z.string().trim()).default([]),
+  consistencyModel: consistencyModelSchema.default("EVENTUAL"),
+  budget: budgetLevelSchema.default("BALANCED"),
+  compliance: z.array(z.string().trim()).default([]),
 });
 
 export const systemDesignProblemSchema = z.object({

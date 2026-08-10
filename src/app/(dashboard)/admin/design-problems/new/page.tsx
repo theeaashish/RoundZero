@@ -2,6 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
+  ChevronDown,
+  ChevronUp,
   Clock3,
   Loader2,
   Plus,
@@ -9,6 +11,7 @@ import {
   Save,
   Scale,
   Server,
+  SlidersHorizontal,
   Sparkles,
   Target,
   Trash2,
@@ -62,40 +65,82 @@ import {
 } from "@/lib/validations/practice";
 
 const TOPIC_CHIPS = [
-  { label: "Twitter", description: "Social feed and fanout" },
-  { label: "WhatsApp", description: "Realtime delivery and presence" },
-  { label: "Netflix", description: "Global media streaming" },
-  { label: "Stripe Ledger", description: "Consistency and auditability" },
-  { label: "Uber Dispatch", description: "Geo queries and matching" },
-  { label: "Dropbox", description: "Blob storage and sync" },
+  {
+    label: "Pastebin Service",
+    description: "Text storage, TTL & short links",
+    topic: "Design a Pastebin Service",
+    prompt:
+      "Focus on short URL generation, expiration/TTL cleanup, high read volume, and rate limiting.",
+  },
+  {
+    label: "Rate Limiter",
+    description: "Distributed rate limiting & token bucket",
+    topic: "Design a Distributed Rate Limiter",
+    prompt: "Multi-region API gateway rate limiting with low latency overhead.",
+  },
+  {
+    label: "Twitter Feed",
+    description: "Social feed fanout & timeline",
+    topic: "Design Twitter News Feed",
+    prompt:
+      "Fan-out on write vs read for celebrity users, timeline caching, and push notifications.",
+  },
+  {
+    label: "WhatsApp Chat",
+    description: "Realtime messaging & presence",
+    topic: "Design WhatsApp Messaging",
+    prompt:
+      "E2E encryption, receipt acknowledgments, presence status, and offline queueing.",
+  },
+  {
+    label: "Netflix Streaming",
+    description: "Global media streaming & CDN",
+    topic: "Design Netflix Streaming",
+    prompt:
+      "Adaptive bitrate streaming, CDN edge caching, and recommendation ingestion.",
+  },
+  {
+    label: "Stripe Ledger",
+    description: "Financial ledger & auditability",
+    topic: "Design Stripe Ledger",
+    prompt:
+      "Idempotency, double-entry bookkeeping, strict ACID compliance, and audit logs.",
+  },
+  {
+    label: "Uber Dispatch",
+    description: "Geo queries & matching",
+    topic: "Design Uber Driver Dispatch",
+    prompt:
+      "Geohash indexing, driver location tracking, matching algorithms, and surge pricing.",
+  },
+  {
+    label: "Dropbox Sync",
+    description: "File blob storage & chunk sync",
+    topic: "Design Dropbox File Sync",
+    prompt: "Chunking, deduplication, delta sync, metadata DB, and S3 storage.",
+  },
 ] as const;
 
 const defaultGenerationValues: z.infer<typeof problemGenerationInputSchema> = {
   topic: "",
+  prompt: "",
   domain: "DATA",
   complexity: "MEDIUM",
   interviewRole: "SENIOR",
   estimatedDurationMinutes: 45,
   productStage: "GROWTH",
-  scenario:
-    "The product team expects a polished v1 that can survive rapid adoption without a full rewrite.",
-  functionalFocus: [
-    "Core user write path",
-    "Read path and user retrieval experience",
-  ],
-  nonFunctionalFocus: [
-    "Latency and availability targets",
-    "Scalability and fault tolerance",
-  ],
-  dailyActiveUsers: "8M DAU",
-  peakRequestsPerSecond: "35k RPS peak",
-  readWriteRatio: "85:15",
-  latencyTarget: "P95 < 250ms for user-facing reads",
-  availabilityTarget: "99.95%",
-  primaryRegions: ["us-east-1", "eu-west-1"],
+  scenario: "",
+  functionalFocus: [],
+  nonFunctionalFocus: [],
+  dailyActiveUsers: "",
+  peakRequestsPerSecond: "",
+  readWriteRatio: "",
+  latencyTarget: "",
+  availabilityTarget: "",
+  primaryRegions: [],
   consistencyModel: "EVENTUAL",
   budget: "BALANCED",
-  compliance: ["GDPR"],
+  compliance: [],
 };
 
 const defaultProblemValues: z.infer<typeof systemDesignProblemSchema> = {
@@ -147,6 +192,7 @@ export default function NewDesignProblemPage() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isSaving, setIsSaving] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [generated, setGenerated] =
     useState<GeneratedSystemDesignProblem | null>(null);
 
@@ -251,27 +297,28 @@ export default function NewDesignProblemPage() {
                 Create A Real System Design Interview
               </h1>
               <p className="mx-auto max-w-3xl text-base text-muted-foreground">
-                Configure the product domain, scale, constraints, and review
-                expectations so the generated problem feels like a real
-                production design discussion instead of a one-line prompt.
+                Enter a system design topic or prompt. AI will automatically
+                synthesize a complete, production-ready problem statement with
+                scale profiles, SLOs, evaluation rubrics, and follow-up
+                scenarios.
               </p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
               <MetricCard
                 icon={Target}
-                label="Structured Inputs"
-                value="Scope, scale, constraints"
+                label="Instant AI Generation"
+                value="Topic or prompt to full challenge"
               />
               <MetricCard
                 icon={Scale}
                 label="Realistic Specs"
-                value="SLOs, regions, consistency"
+                value="Auto-synthesized SLOs & scale"
               />
               <MetricCard
                 icon={Clock3}
-                label="Interview Framing"
-                value="Role and duration aware"
+                label="Review & Edit Mode"
+                value="Fine-tune before saving to library"
               />
             </div>
           </div>
@@ -281,52 +328,94 @@ export default function NewDesignProblemPage() {
       {!generated ? (
         <Form {...genForm}>
           <form className="space-y-8" onSubmit={onGenerate}>
-            <section className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
-              <div className="space-y-6 rounded-3xl border bg-card p-6 shadow-sm">
-                <div className="space-y-2">
-                  <h2 className="text-lg font-semibold">Challenge Brief</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Define what the candidate is designing and what kind of
-                    interview this should feel like.
-                  </p>
-                </div>
+            {/* Quick Seeds */}
+            <div className="space-y-3 rounded-3xl border bg-card p-6 shadow-sm">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <span>Quick-Start Challenge Seeds</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Click a seed topic to instantly populate the title and
+                instructions.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {TOPIC_CHIPS.map((chip) => (
+                  <button
+                    key={chip.label}
+                    type="button"
+                    onClick={() => {
+                      genForm.setValue("topic", chip.topic);
+                      genForm.setValue("prompt", chip.prompt);
+                    }}
+                    className="group rounded-2xl border bg-background/60 p-4 text-left transition-all hover:border-primary/50 hover:bg-primary/5 hover:shadow-sm"
+                  >
+                    <div className="text-sm font-semibold group-hover:text-primary">
+                      {chip.label}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground line-clamp-1">
+                      {chip.description}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                <div className="grid gap-6 md:grid-cols-2">
-                  <FormField
-                    control={genForm.control}
-                    name="topic"
-                    render={({ field }) => (
-                      <FormItem className="md:col-span-2">
-                        <FormLabel>System Topic</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="e.g. Design a global collaborative document editor"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+            {/* Core Simple Generation Form */}
+            <div className="space-y-6 rounded-3xl border bg-card p-6 shadow-sm">
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold">
+                  Challenge Specification
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Specify the core title and optional focus instructions for AI
+                  generation.
+                </p>
+              </div>
 
-                  <FormField
-                    control={genForm.control}
-                    name="scenario"
-                    render={({ field }) => (
-                      <FormItem className="md:col-span-2">
-                        <FormLabel>Scenario</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            rows={4}
-                            placeholder="Describe the product pressure, launch context, or business objective."
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+              <div className="space-y-4">
+                <FormField
+                  control={genForm.control}
+                  name="topic"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-semibold text-foreground">
+                        System Design Topic / Challenge Title{" "}
+                        <span className="text-primary">*</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          className="h-11 rounded-xl text-base"
+                          placeholder="e.g. Design a Pastebin Service or Distributed Rate Limiter"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
+                <FormField
+                  control={genForm.control}
+                  name="prompt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Optional Specific Instructions / Context
+                      </FormLabel>
+                      <FormControl>
+                        <Textarea
+                          rows={3}
+                          className="rounded-xl text-sm"
+                          placeholder="e.g. Focus on short URL generation, TTL expiration cleanup, low read latency, and rate limiting."
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4 pt-2">
                   <SelectField
                     control={genForm.control}
                     name="domain"
@@ -345,19 +434,12 @@ export default function NewDesignProblemPage() {
                     label="Target Role"
                     options={INTERVIEW_ROLES}
                   />
-                  <SelectField
-                    control={genForm.control}
-                    name="productStage"
-                    label="Product Stage"
-                    options={PRODUCT_STAGES}
-                  />
-
                   <FormField
                     control={genForm.control}
                     name="estimatedDurationMinutes"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Interview Duration</FormLabel>
+                        <FormLabel>Duration (Mins)</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -374,198 +456,195 @@ export default function NewDesignProblemPage() {
                     )}
                   />
                 </div>
+              </div>
+            </div>
 
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Sparkles className="h-4 w-4" />
-                    <span>Popular challenge seeds</span>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {TOPIC_CHIPS.map((chip) => (
-                      <button
-                        key={chip.label}
-                        type="button"
-                        onClick={() =>
-                          genForm.setValue("topic", `Design ${chip.label}`)
-                        }
-                        className="rounded-2xl border bg-background p-4 text-left transition-colors hover:border-primary/50 hover:bg-primary/5"
-                      >
-                        <div className="text-sm font-medium">{chip.label}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {chip.description}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+            {/* Collapsible Advanced Technical Parameters */}
+            <div className="rounded-3xl border bg-card/60 p-5 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((prev) => !prev)}
+                className="flex w-full items-center justify-between text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="h-4 w-4 text-primary" />
+                  <span>
+                    Advanced Scale & Technical Specifications (Optional)
+                  </span>
                 </div>
-              </div>
-
-              <div className="space-y-6 rounded-3xl border bg-card p-6 shadow-sm">
-                <div className="space-y-2">
-                  <h2 className="text-lg font-semibold">Scale And SLOs</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Seed the traffic profile so AI has enough context to create
-                    believable numbers and tradeoffs.
-                  </p>
-                </div>
-
-                <FormField
-                  control={genForm.control}
-                  name="dailyActiveUsers"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Daily Active Users</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={genForm.control}
-                  name="peakRequestsPerSecond"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Peak Requests Per Second</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={genForm.control}
-                  name="readWriteRatio"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Read / Write Ratio</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={genForm.control}
-                  name="latencyTarget"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Latency Target</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={genForm.control}
-                  name="availabilityTarget"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Availability Target</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <SelectField
-                  control={genForm.control}
-                  name="consistencyModel"
-                  label="Consistency Model"
-                  options={CONSISTENCY_MODELS}
-                />
-                <SelectField
-                  control={genForm.control}
-                  name="budget"
-                  label="Budget Posture"
-                  options={BUDGET_LEVELS}
-                />
-              </div>
-            </section>
-
-            <section className="grid gap-6 lg:grid-cols-2">
-              <div className="rounded-3xl border bg-card p-6 shadow-sm">
-                <EditableStringList
-                  label="Functional Focus"
-                  description="Tell the generator which product capabilities must be central to the problem."
-                  values={genForm.watch("functionalFocus")}
-                  onChange={(values) =>
-                    genForm.setValue("functionalFocus", values, {
-                      shouldValidate: true,
-                    })
-                  }
-                  addLabel="Add Functional Focus"
-                  placeholder="e.g. Feed ranking, fanout, comment publishing"
-                />
-              </div>
-
-              <div className="rounded-3xl border bg-card p-6 shadow-sm">
-                <EditableStringList
-                  label="Non-Functional Focus"
-                  description="This becomes the review lens for the generated prompt."
-                  values={genForm.watch("nonFunctionalFocus")}
-                  onChange={(values) =>
-                    genForm.setValue("nonFunctionalFocus", values, {
-                      shouldValidate: true,
-                    })
-                  }
-                  addLabel="Add Constraint"
-                  placeholder="e.g. Multi-region failover, hot partition handling"
-                />
-              </div>
-            </section>
-
-            <section className="grid gap-6 lg:grid-cols-2">
-              <div className="rounded-3xl border bg-card p-6 shadow-sm">
-                <EditableStringList
-                  label="Primary Regions"
-                  description="Regions or countries the design should explicitly consider."
-                  values={genForm.watch("primaryRegions")}
-                  onChange={(values) =>
-                    genForm.setValue("primaryRegions", values, {
-                      shouldValidate: true,
-                    })
-                  }
-                  addLabel="Add Region"
-                  placeholder="e.g. ap-south-1"
-                />
-              </div>
-
-              <div className="rounded-3xl border bg-card p-6 shadow-sm">
-                <EditableStringList
-                  label="Compliance"
-                  description="Optional. Leave empty if the prompt should not stress regulatory constraints."
-                  values={genForm.watch("compliance")}
-                  onChange={(values) =>
-                    genForm.setValue("compliance", values, {
-                      shouldValidate: true,
-                    })
-                  }
-                  addLabel="Add Compliance Requirement"
-                  placeholder="e.g. PCI-DSS"
-                />
-              </div>
-            </section>
-
-            <div className="flex justify-end">
-              <Button type="submit" size="lg" disabled={isPending}>
-                {isPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {showAdvanced ? (
+                  <ChevronUp className="h-4 w-4" />
                 ) : (
-                  <Sparkles className="mr-2 h-4 w-4" />
+                  <ChevronDown className="h-4 w-4" />
                 )}
-                Generate Challenge
+              </button>
+
+              {showAdvanced && (
+                <div className="mt-6 space-y-6 border-t pt-6">
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <FormField
+                      control={genForm.control}
+                      name="scenario"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel>Scenario Context</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              rows={3}
+                              placeholder="Describe the launch scenario or business context."
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <SelectField
+                      control={genForm.control}
+                      name="productStage"
+                      label="Product Stage"
+                      options={PRODUCT_STAGES}
+                    />
+
+                    <FormField
+                      control={genForm.control}
+                      name="dailyActiveUsers"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Daily Active Users</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g. 8M DAU" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={genForm.control}
+                      name="peakRequestsPerSecond"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Peak Requests Per Second</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g. 35k RPS peak" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={genForm.control}
+                      name="readWriteRatio"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Read / Write Ratio</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g. 90:10" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={genForm.control}
+                      name="latencyTarget"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Latency Target</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g. P95 < 200ms" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={genForm.control}
+                      name="availabilityTarget"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Availability Target</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g. 99.95%" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <SelectField
+                      control={genForm.control}
+                      name="consistencyModel"
+                      label="Consistency Model"
+                      options={CONSISTENCY_MODELS}
+                    />
+
+                    <SelectField
+                      control={genForm.control}
+                      name="budget"
+                      label="Budget Posture"
+                      options={BUDGET_LEVELS}
+                    />
+                  </div>
+
+                  <section className="grid gap-6 lg:grid-cols-2">
+                    <div className="rounded-2xl border bg-background p-4">
+                      <EditableStringList
+                        label="Functional Focus"
+                        description="Product capabilities to emphasize."
+                        values={genForm.watch("functionalFocus")}
+                        onChange={(values) =>
+                          genForm.setValue("functionalFocus", values, {
+                            shouldValidate: true,
+                          })
+                        }
+                        addLabel="Add Functional Focus"
+                        placeholder="e.g. Short URL generation, TTL cleanup"
+                      />
+                    </div>
+
+                    <div className="rounded-2xl border bg-background p-4">
+                      <EditableStringList
+                        label="Non-Functional Focus"
+                        description="Constraints to emphasize during review."
+                        values={genForm.watch("nonFunctionalFocus")}
+                        onChange={(values) =>
+                          genForm.setValue("nonFunctionalFocus", values, {
+                            shouldValidate: true,
+                          })
+                        }
+                        addLabel="Add Constraint"
+                        placeholder="e.g. Multi-region failover, rate limiting"
+                      />
+                    </div>
+                  </section>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button
+                type="submit"
+                size="lg"
+                className="h-12 rounded-2xl px-8 text-base font-semibold shadow-lg transition-transform hover:scale-[1.02]"
+                disabled={isPending}
+              >
+                {isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Generating Problem with AI...
+                  </>
+                ) : (
+                  <>
+                    <WandSparkles className="mr-2 h-5 w-5" />
+                    Generate Problem with AI
+                  </>
+                )}
               </Button>
             </div>
           </form>
