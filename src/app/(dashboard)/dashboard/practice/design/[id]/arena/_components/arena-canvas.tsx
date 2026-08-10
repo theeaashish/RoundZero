@@ -1,5 +1,7 @@
 "use client";
 
+import { experimental_useObject as useObject } from "@ai-sdk/react";
+import { useQuery } from "@tanstack/react-query";
 import {
   addEdge,
   Background,
@@ -9,6 +11,8 @@ import {
   type Edge,
   type EdgeTypes,
   MiniMap,
+  type Node,
+  type NodeTypes,
   Panel,
   ReactFlow,
   ReactFlowProvider,
@@ -16,11 +20,9 @@ import {
   useNodesState,
   useReactFlow,
 } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "@xyflow/react/dist/style.css";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import type { Node, NodeTypes } from "@xyflow/react";
 import { RefreshCw, Save, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -95,18 +97,25 @@ function ArenaInner({ problemId }: { problemId: string }) {
     }),
   );
 
-  const { mutate: evaluateArchitecture, isPending: isEvaluating } = useMutation(
-    orpc.practice.evaluateArchitecture.mutationOptions({
-      onSuccess: (data) => {
-        setEvaluationResult(data);
-        setShowResults(true);
-        toast.success("Architecture evaluated successfully");
-      },
-      onError: (error) => {
-        toast.error(error.message || "Failed to evaluate architecture");
-      },
-    }),
-  );
+  const {
+    object: streamedObject,
+    submit: submitEvaluationStream,
+    isLoading: isStreamingEvaluation,
+    stop: stopEvaluationStream,
+    clear: clearEvaluationStream,
+  } = useObject({
+    api: "/api/practice/evaluate-stream",
+    schema: architectureEvaluationSchema,
+    onFinish({ object }) {
+      if (object) {
+        setEvaluationResult(object as ArchitectureEvaluation);
+        toast.success("Architecture review complete.");
+      }
+    },
+    onError(error) {
+      toast.error(error.message || "Failed to evaluate architecture");
+    },
+  });
 
   useEffect(() => {
     if (attempt === undefined) return;
@@ -218,31 +227,11 @@ function ArenaInner({ problemId }: { problemId: string }) {
       data: buildArchitectureNodeData(type),
     };
 
-    setNodes((currentNodes) => currentNodes.concat(newNode));
+    setNodes((currentNodes) => [...currentNodes, newNode]);
   };
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Backspace" && event.key !== "Delete") return;
-
-      const target = event.target as HTMLElement | null;
-      if (
-        target?.tagName === "INPUT" ||
-        target?.tagName === "TEXTAREA" ||
-        target?.isContentEditable
-      ) {
-        return;
-      }
-
-      setNodes((currentNodes) => currentNodes.filter((node) => !node.selected));
-      setEdges((currentEdges) => currentEdges.filter((edge) => !edge.selected));
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [setEdges, setNodes]);
-
-  const saveCanvas = async (showToast: boolean) => {
+  const saveCanvas = async () => {
+    if (!hydratedRef.current) return;
     try {
       setIsSaving(true);
       const payload = architectureCanvasSchema.parse({
@@ -253,11 +242,10 @@ function ArenaInner({ problemId }: { problemId: string }) {
         problemId,
         architectureJson: payload,
       });
+
       lastSavedSnapshotRef.current = JSON.stringify(payload);
       setLastSavedAt(new Date());
-      if (showToast) {
-        toast.success("Architecture saved successfully");
-      }
+      toast.success("Progress saved successfully");
     } catch (_error) {
       toast.error("Failed to save progress");
     } finally {
@@ -317,7 +305,14 @@ function ArenaInner({ problemId }: { problemId: string }) {
         edges: getEdges(),
       });
 
-      evaluateArchitecture({
+      if (isStreamingEvaluation) {
+        stopEvaluationStream();
+      }
+      clearEvaluationStream();
+      setEvaluationResult(null);
+
+      setShowResults(true);
+      submitEvaluationStream({
         problemId,
         nodes: payload.nodes,
         edges: payload.edges,
@@ -405,7 +400,7 @@ function ArenaInner({ problemId }: { problemId: string }) {
                 <Button
                   size="sm"
                   className="cursor-pointer rounded-xl font-medium shadow-md"
-                  onClick={() => void saveCanvas(true)}
+                  onClick={() => void saveCanvas()}
                   disabled={isSaving}
                 >
                   {isSaving ? (
@@ -419,9 +414,9 @@ function ArenaInner({ problemId }: { problemId: string }) {
                   size="sm"
                   className="cursor-pointer rounded-xl font-medium shadow-md"
                   onClick={handleEvaluate}
-                  disabled={isEvaluating}
+                  disabled={isStreamingEvaluation}
                 >
-                  {isEvaluating ? (
+                  {isStreamingEvaluation ? (
                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <Sparkles className="mr-2 h-4 w-4" />
@@ -455,8 +450,11 @@ function ArenaInner({ problemId }: { problemId: string }) {
       <EvaluationResultsSheet
         open={showResults}
         onOpenChange={setShowResults}
-        evaluation={evaluationResult}
-        isLoading={isEvaluating}
+        evaluation={
+          (streamedObject as ArchitectureEvaluation) ?? evaluationResult
+        }
+        isLoading={isStreamingEvaluation && !streamedObject}
+        isStreaming={isStreamingEvaluation}
       />
     </div>
   );

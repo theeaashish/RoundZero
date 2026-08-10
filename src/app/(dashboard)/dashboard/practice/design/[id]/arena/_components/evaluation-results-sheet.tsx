@@ -1,5 +1,6 @@
 "use client";
 
+import type { DeepPartial } from "ai";
 import { CheckCircle2, Lightbulb, Loader2, XCircle } from "lucide-react";
 import {
   Bar,
@@ -29,34 +30,19 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import type { ArchitectureEvaluation } from "@/lib/architecture-evaluation";
 import { cn } from "@/lib/utils";
 
 // ── Types ──
 
-interface CategoryScores {
-  scalability: number;
-  reliability: number;
-  availability: number;
-  performance: number;
-  security: number;
-  maintainability: number;
-  costOptimization: number;
-}
-
-interface ArchitectureEvaluation {
-  overallScore: number;
-  categoryScores: CategoryScores;
-  strengths: string[];
-  bottlenecks: string[];
-  suggestions: string[];
-  summary: string;
-}
+type CategoryScores = NonNullable<ArchitectureEvaluation["categoryScores"]>;
 
 interface EvaluationResultsSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  evaluation: ArchitectureEvaluation | null;
+  evaluation: DeepPartial<ArchitectureEvaluation> | null;
   isLoading?: boolean;
+  isStreaming?: boolean;
 }
 
 // ── Config Maps ──
@@ -102,27 +88,34 @@ export function EvaluationResultsSheet({
   onOpenChange,
   evaluation,
   isLoading,
+  isStreaming,
 }: EvaluationResultsSheetProps) {
   if (!evaluation && !isLoading) return null;
 
-  const radarData = evaluation
-    ? Object.entries(evaluation.categoryScores).map(([key, value]) => ({
-        category: CATEGORY_META[key as keyof CategoryScores]?.label ?? key,
-        score: value,
-      }))
-    : [];
-
-  const barData = evaluation
+  const radarData = evaluation?.categoryScores
     ? Object.entries(evaluation.categoryScores)
+        .filter(([_, value]) => value !== undefined)
         .map(([key, value]) => ({
           category: CATEGORY_META[key as keyof CategoryScores]?.label ?? key,
-          score: value,
-          fill: CATEGORY_META[key as keyof CategoryScores]?.color,
+          score: value ?? 0,
         }))
-        .sort((a, b) => b.score - a.score)
     : [];
 
-  const grade = evaluation ? getScoreGrade(evaluation.overallScore) : null;
+  const barData = evaluation?.categoryScores
+    ? Object.entries(evaluation.categoryScores)
+        .filter(([_, value]) => value !== undefined)
+        .map(([key, value]) => ({
+          category: CATEGORY_META[key as keyof CategoryScores]?.label ?? key,
+          score: value ?? 0,
+          fill: CATEGORY_META[key as keyof CategoryScores]?.color,
+        }))
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    : [];
+
+  const grade =
+    evaluation?.overallScore !== undefined
+      ? getScoreGrade(evaluation.overallScore)
+      : null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -132,22 +125,30 @@ export function EvaluationResultsSheet({
             <SheetTitle className="text-xl font-bold">
               Architecture Review
             </SheetTitle>
-            {evaluation && grade && (
+            {evaluation?.overallScore !== undefined && grade ? (
               <Badge variant={grade.variant} className="text-sm px-2.5 py-0.5">
                 {evaluation.overallScore}/100
               </Badge>
-            )}
+            ) : isStreaming || isLoading ? (
+              <Badge
+                variant="outline"
+                className="text-sm px-2.5 py-0.5 animate-pulse bg-primary/10 text-primary border-primary/20"
+              >
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                Analyzing Architecture...
+              </Badge>
+            ) : null}
           </div>
           <SheetDescription>
             AI-powered evaluation of your system design
           </SheetDescription>
         </SheetHeader>
 
-        {isLoading ? (
+        {isLoading && !evaluation ? (
           <div className="flex-1 flex flex-col items-center justify-center p-12 gap-4">
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
             <p className="text-sm text-muted-foreground font-medium">
-              Analyzing your architecture…
+              Connecting to AI Architect...
             </p>
           </div>
         ) : evaluation ? (
@@ -156,9 +157,16 @@ export function EvaluationResultsSheet({
               {/* ── Summary Card ── */}
               <Card className="bg-muted/30 border-border/60">
                 <CardContent className="pt-5 pb-5">
-                  <p className="text-sm leading-relaxed text-foreground/90">
-                    {evaluation.summary}
-                  </p>
+                  {evaluation.summary ? (
+                    <p className="text-sm leading-relaxed text-foreground/90">
+                      {evaluation.summary}
+                    </p>
+                  ) : (
+                    <div className="space-y-2 animate-pulse">
+                      <div className="h-4 bg-muted-foreground/20 rounded w-3/4" />
+                      <div className="h-4 bg-muted-foreground/20 rounded w-1/2" />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -172,36 +180,46 @@ export function EvaluationResultsSheet({
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="px-2 pb-4">
-                    <ChartContainer
-                      config={radarChartConfig}
-                      className="mx-auto aspect-square h-[280px]"
-                    >
-                      <RadarChart
-                        data={radarData}
-                        margin={{ top: 20, right: 30, bottom: 20, left: 30 }}
+                    {radarData.length === 7 ? (
+                      <ChartContainer
+                        config={radarChartConfig}
+                        className="mx-auto aspect-square h-[280px]"
                       >
-                        <ChartTooltip
-                          cursor={false}
-                          content={<ChartTooltipContent />}
-                        />
-                        <PolarGrid stroke="rgba(150, 150, 150, 0.5)" />
-                        <PolarAngleAxis
-                          dataKey="category"
-                          tick={{
-                            fontSize: 12,
-                            fill: "rgba(200, 200, 200, 0.9)",
-                            fontWeight: 500,
-                          }}
-                        />
-                        <Radar
-                          name="Score"
-                          dataKey="score"
-                          fill="rgba(255, 255, 255, 0.4)"
-                          stroke="rgba(255, 255, 255, 0.8)"
-                          strokeWidth={2}
-                        />
-                      </RadarChart>
-                    </ChartContainer>
+                        <RadarChart
+                          data={radarData}
+                          margin={{ top: 20, right: 30, bottom: 20, left: 30 }}
+                        >
+                          <ChartTooltip
+                            cursor={false}
+                            content={<ChartTooltipContent />}
+                          />
+                          <PolarGrid stroke="rgba(150, 150, 150, 0.5)" />
+                          <PolarAngleAxis
+                            dataKey="category"
+                            tick={{
+                              fontSize: 12,
+                              fill: "rgba(200, 200, 200, 0.9)",
+                              fontWeight: 500,
+                            }}
+                          />
+                          <Radar
+                            name="Score"
+                            dataKey="score"
+                            fill="rgba(255, 255, 255, 0.4)"
+                            stroke="rgba(255, 255, 255, 0.8)"
+                            strokeWidth={2}
+                          />
+                        </RadarChart>
+                      </ChartContainer>
+                    ) : (
+                      <div className="h-[280px] flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground animate-pulse">
+                        <Loader2 className="h-5 w-5 animate-spin text-primary/60" />
+                        <span>
+                          Calculating category breakdown ({radarData.length}/7
+                          metrics)...
+                        </span>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -213,52 +231,58 @@ export function EvaluationResultsSheet({
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="px-2 pb-4">
-                    <ChartContainer
-                      config={barChartConfig}
-                      className="h-[280px]"
-                    >
-                      <BarChart
-                        data={barData}
-                        layout="vertical"
-                        margin={{ left: 0, right: 12 }}
+                    {barData.length > 0 ? (
+                      <ChartContainer
+                        config={barChartConfig}
+                        className="h-[280px]"
                       >
-                        <CartesianGrid
-                          horizontal={false}
-                          strokeDasharray="3 3"
-                          stroke="rgba(150, 150, 150, 0.3)"
-                        />
-                        <YAxis
-                          dataKey="category"
-                          type="category"
-                          tickLine={false}
-                          axisLine={false}
-                          width={110}
-                          tick={{
-                            fontSize: 12,
-                            fill: "rgba(200, 200, 200, 0.9)",
-                          }}
-                        />
-                        <XAxis
-                          type="number"
-                          domain={[0, 100]}
-                          tickLine={false}
-                          axisLine={false}
-                          tick={{
-                            fontSize: 11,
-                            fill: "rgba(150, 150, 150, 0.8)",
-                          }}
-                        />
-                        <ChartTooltip
-                          cursor={{ fill: "rgba(150, 150, 150, 0.1)" }}
-                          content={<ChartTooltipContent hideLabel />}
-                        />
-                        <Bar
-                          dataKey="score"
-                          radius={[0, 4, 4, 0]}
-                          maxBarSize={16}
-                        />
-                      </BarChart>
-                    </ChartContainer>
+                        <BarChart
+                          data={barData}
+                          layout="vertical"
+                          margin={{ left: 0, right: 12 }}
+                        >
+                          <CartesianGrid
+                            horizontal={false}
+                            strokeDasharray="3 3"
+                            stroke="rgba(150, 150, 150, 0.3)"
+                          />
+                          <YAxis
+                            dataKey="category"
+                            type="category"
+                            tickLine={false}
+                            axisLine={false}
+                            width={110}
+                            tick={{
+                              fontSize: 12,
+                              fill: "rgba(200, 200, 200, 0.9)",
+                            }}
+                          />
+                          <XAxis
+                            type="number"
+                            domain={[0, 100]}
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{
+                              fontSize: 11,
+                              fill: "rgba(150, 150, 150, 0.8)",
+                            }}
+                          />
+                          <ChartTooltip
+                            cursor={{ fill: "rgba(150, 150, 150, 0.1)" }}
+                            content={<ChartTooltipContent hideLabel />}
+                          />
+                          <Bar
+                            dataKey="score"
+                            radius={[0, 4, 4, 0]}
+                            maxBarSize={16}
+                          />
+                        </BarChart>
+                      </ChartContainer>
+                    ) : (
+                      <div className="h-[280px] flex items-center justify-center text-xs text-muted-foreground animate-pulse">
+                        Evaluating trade-offs...
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -272,6 +296,7 @@ export function EvaluationResultsSheet({
                 title="Key Strengths"
                 items={evaluation.strengths}
                 itemClass="bg-emerald-500/10 border-emerald-500/20 dark:bg-emerald-500/5"
+                isStreaming={isStreaming}
               />
 
               <FeedbackSection
@@ -280,6 +305,7 @@ export function EvaluationResultsSheet({
                 title="Identified Bottlenecks"
                 items={evaluation.bottlenecks}
                 itemClass="bg-red-500/10 border-red-500/20 dark:bg-red-500/5"
+                isStreaming={isStreaming}
               />
 
               <FeedbackSection
@@ -288,6 +314,7 @@ export function EvaluationResultsSheet({
                 title="Improvement Suggestions"
                 items={evaluation.suggestions}
                 itemClass="bg-amber-500/10 border-amber-500/20 dark:bg-amber-500/5"
+                isStreaming={isStreaming}
               />
             </div>
           </ScrollArea>
@@ -305,13 +332,35 @@ function FeedbackSection({
   title,
   items,
   itemClass,
+  isStreaming,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   iconColor: string;
   title: string;
-  items: string[];
+  items?: (string | undefined)[];
   itemClass: string;
+  isStreaming?: boolean;
 }) {
+  const filteredItems = (items ?? []).filter((item): item is string =>
+    Boolean(item?.trim()),
+  );
+
+  if (filteredItems.length === 0) {
+    if (!isStreaming) return null;
+
+    return (
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          <Icon className={cn("h-4 w-4", iconColor)} />
+          {title}
+        </h3>
+        <div className="text-xs text-muted-foreground animate-pulse p-3 border rounded-lg border-dashed">
+          Analyzing {title.toLowerCase()}...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -319,9 +368,9 @@ function FeedbackSection({
         {title}
       </h3>
       <ul className="space-y-2">
-        {items.map((item, idx) => (
+        {filteredItems.map((item, idx) => (
           <li
-            key={`${title}-${idx}`}
+            key={`${title}-${idx}-${item.slice(0, 15)}`}
             className={cn(
               "text-sm rounded-lg border p-3 flex items-start gap-2.5 transition-colors",
               itemClass,
