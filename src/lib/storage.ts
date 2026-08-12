@@ -1,6 +1,5 @@
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { v4 as uuidv4 } from "uuid";
 import { STORAGE_CONFIG } from "@/config/storage";
 import { S3 } from "./s3Client";
 
@@ -16,6 +15,7 @@ export type StoragePath = (typeof STORAGE_PATHS)[keyof typeof STORAGE_PATHS];
 // Content types
 export const CONTENT_TYPES = {
   WAV: "audio/wav",
+  MP3: "audio/mpeg",
   WEBM: "audio/webm",
   PDF: "application/pdf",
   DOCX: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -30,6 +30,9 @@ export interface UploadResult {
   key: string;
   url: string;
 }
+
+export const getInterviewAudioKey = (interviewId: string, messageId: string) =>
+  `${STORAGE_PATHS.INTERVIEWS}/${interviewId}/${STORAGE_PATHS.AUDIO}/${messageId}.mp3`;
 
 // Storage service for S3 operations
 export const storageService = {
@@ -58,17 +61,25 @@ export const storageService = {
     };
   },
 
-  // Upload audio file with auto-generated filename
-  async uploadAudio(
+  // Upload message audio to a deterministic key so retries are idempotent.
+  async uploadInterviewAudio(
     buffer: Buffer,
     interviewId: string,
-    contentType: string = CONTENT_TYPES.WAV,
+    messageId: string,
+    contentType: string = CONTENT_TYPES.MP3,
   ): Promise<string> {
-    const filename = `${uuidv4()}.wav`;
-    const path = `${STORAGE_PATHS.INTERVIEWS}/${interviewId}/${STORAGE_PATHS.AUDIO}`;
+    const key = getInterviewAudioKey(interviewId, messageId);
 
-    const result = await this.upload(buffer, path, filename, { contentType });
-    return result.url;
+    await S3.send(
+      new PutObjectCommand({
+        Bucket: STORAGE_CONFIG.bucketName,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+      }),
+    );
+
+    return key;
   },
 
   // Download a file from S3

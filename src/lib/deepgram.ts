@@ -48,17 +48,31 @@ const DEFAULT_STT_OPTIONS: Required<STTOptions> = {
 };
 
 // TTS configuration
-export interface TTSOptions {
-  voice?: TTSVoice;
-  encoding?: "linear16" | "mp3" | "opus" | "flac" | "alaw" | "mulaw";
-  container?: "wav" | "mp3" | "ogg" | "none";
-}
+export type TTSEncoding =
+  | "linear16"
+  | "mp3"
+  | "opus"
+  | "flac"
+  | "alaw"
+  | "mulaw";
+export type TTSContainer = "wav" | "ogg" | "none";
 
-const DEFAULT_TTS_OPTIONS: Required<TTSOptions> = {
+type TTSVoiceOption = { voice?: TTSVoice };
+
+export type TTSOptions = TTSVoiceOption &
+  (
+    | { encoding: "mp3"; container?: never }
+    | {
+        encoding?: Exclude<TTSEncoding, "mp3">;
+        container?: TTSContainer;
+      }
+  );
+
+const DEFAULT_TTS_OPTIONS = {
   voice: TTS_VOICES.ASTERIA,
   encoding: "linear16",
   container: "wav",
-};
+} as const;
 
 // Create a real-time STT WebSocket connection
 export const createSTTWebSocket = (options: STTOptions = {}) => {
@@ -83,14 +97,18 @@ export const textToSpeech = async (
 ): Promise<Buffer> => {
   const voice = options.voice ?? DEFAULT_TTS_OPTIONS.voice;
   const encoding = options.encoding ?? DEFAULT_TTS_OPTIONS.encoding;
-  const container = options.container ?? DEFAULT_TTS_OPTIONS.container;
+  const container =
+    encoding === "mp3"
+      ? undefined
+      : (options.container ??
+        (encoding === "linear16" ? DEFAULT_TTS_OPTIONS.container : undefined));
 
   const response = await deepgram.speak.request(
     { text },
     {
       model: voice,
       encoding,
-      container,
+      ...(container ? { container } : {}),
     },
   );
 

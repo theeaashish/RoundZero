@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 
 const protectedPaths = ["/dashboard"];
 
@@ -23,16 +24,21 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Get session cookie
-  const sessionCookie =
-    request.cookies.get("better-auth.session_token") ||
-    request.cookies.get("__Secure-better-auth.session_token");
+  // Validate the signed, non-expired session and load the current user state.
+  // This also prevents a stale cookie from treating a banned user as signed in.
+  const session = await auth.api
+    .getSession({ headers: request.headers })
+    .catch(() => null);
+  const isBanned =
+    session?.user.banned === true &&
+    (!session.user.banExpires || session.user.banExpires > Date.now());
+  const hasValidSession = Boolean(session?.user) && !isBanned;
 
   // Handle shared system-design links
   if (pathname.startsWith("/system-design/")) {
     const slug = pathname.split("/")[2];
     if (slug) {
-      if (!sessionCookie) {
+      if (!hasValidSession) {
         const signInUrl = new URL("/sign-in", request.url);
         signInUrl.searchParams.set("redirect", pathname);
         return NextResponse.redirect(signInUrl);
@@ -48,14 +54,14 @@ export async function proxy(request: NextRequest) {
   }
 
   // Redirect unauthenticated users from protected routes to sign-in
-  if (isProtectedPath && !sessionCookie) {
+  if (isProtectedPath && !hasValidSession) {
     const signInUrl = new URL("/sign-in", request.url);
     signInUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(signInUrl);
   }
 
   // Redirect authenticated users from auth routes to dashboard
-  if (isAuthPath && sessionCookie) {
+  if (isAuthPath && hasValidSession) {
     if (request.nextUrl.searchParams.get("error") === "session") {
       return NextResponse.next();
     }

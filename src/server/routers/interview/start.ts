@@ -114,7 +114,10 @@ export async function startSession({
     };
   });
 
-  const audioUrl = sessionState.createdAssistantMessage
+  const shouldGenerateAudio =
+    sessionState.createdAssistantMessage ||
+    !sessionState.assistantMessage.audioUrl;
+  const audioUrl = shouldGenerateAudio
     ? await generateAndUploadInterviewAudio(
         openingMessage,
         interview.id,

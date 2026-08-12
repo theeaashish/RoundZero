@@ -54,7 +54,7 @@ export type InterviewReportRecord = Prisma.ReportGetPayload<{
   select: typeof interviewReportSelect;
 }>;
 
-const INTERVIEW_AUDIO_CONTENT_TYPE = CONTENT_TYPES.WAV;
+const INTERVIEW_AUDIO_CONTENT_TYPE = CONTENT_TYPES.MP3;
 
 type InterviewPromptContext = {
   id: string;
@@ -316,32 +316,8 @@ export const createAssistantInterviewMessage = async (input: {
     select: interviewMessageSelect,
   });
 
-const toAudioDataUrl = (
-  audioBuffer: Buffer,
-  contentType: string = INTERVIEW_AUDIO_CONTENT_TYPE,
-) => `data:${contentType};base64,${audioBuffer.toString("base64")}`;
-
-const persistInterviewAudioUpload = (input: {
-  audioBuffer: Buffer;
-  interviewId: string;
-  messageId: string;
-}) => {
-  void storageService
-    .uploadAudio(
-      input.audioBuffer,
-      input.interviewId,
-      INTERVIEW_AUDIO_CONTENT_TYPE,
-    )
-    .then(async (audioUrl) => {
-      await db.message.update({
-        where: { id: input.messageId },
-        data: { audioUrl },
-      });
-    })
-    .catch((error) => {
-      console.error("[Audio Upload Error]", error);
-    });
-};
+const getInterviewAudioUrl = (messageId: string) =>
+  `/api/media/tts/${encodeURIComponent(messageId)}`;
 
 export const generateAndUploadInterviewAudio = async (
   text: string,
@@ -350,18 +326,26 @@ export const generateAndUploadInterviewAudio = async (
 ): Promise<string | undefined> => {
   try {
     const cleanedText = cleanTextForTTS(text);
-    const audioBuffer = await textToSpeech(` ${cleanedText}`);
-    const playbackUrl = toAudioDataUrl(audioBuffer);
+    const audioBuffer = await textToSpeech(` ${cleanedText}`, {
+      encoding: "mp3",
+    });
 
-    persistInterviewAudioUpload({
+    await storageService.uploadInterviewAudio(
       audioBuffer,
       interviewId,
       messageId,
+      INTERVIEW_AUDIO_CONTENT_TYPE,
+    );
+
+    const audioUrl = getInterviewAudioUrl(messageId);
+    await db.message.update({
+      where: { id: messageId },
+      data: { audioUrl },
     });
 
-    return playbackUrl;
+    return audioUrl;
   } catch (error) {
-    console.error("[TTS Error]", error);
+    console.error("[TTS Error]", { error, interviewId, messageId });
     return undefined;
   }
 };
