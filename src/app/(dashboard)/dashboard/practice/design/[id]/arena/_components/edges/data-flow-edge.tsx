@@ -8,16 +8,11 @@ import {
 } from "@xyflow/react";
 import { X } from "lucide-react";
 import { memo, useCallback, useState } from "react";
+import type { ArchitectureEdgeData } from "@/lib/architecture-types";
 import { cn } from "@/lib/utils";
+import { useLoadTestVisualization } from "../load-test/load-test-context";
 
-export type DataFlowEdgeData = {
-  label?: string;
-  protocol?: string;
-  flowType?: string;
-  notes?: string;
-};
-
-type DataFlowEdgeType = Edge<DataFlowEdgeData, "dataFlowEdge">;
+type DataFlowEdgeType = Edge<ArchitectureEdgeData, "dataFlowEdge">;
 
 function DataFlowEdgeComponent({
   id,
@@ -33,6 +28,9 @@ function DataFlowEdgeComponent({
   data,
 }: EdgeProps<DataFlowEdgeType>) {
   const { setEdges } = useReactFlow();
+  const { result, running } = useLoadTestVisualization();
+  const simulation = result?.edgeStates[id];
+  const packetCount = running ? (result?.packetsByEdge[id] ?? 0) : 0;
   const [hovered, setHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [label, setLabel] = useState(data?.label ?? "");
@@ -62,15 +60,31 @@ function DataFlowEdgeComponent({
   }, [id, label, setEdges]);
 
   // Derive stroke color — use CSS var() directly so oklch values work
-  const strokeColor = selected
-    ? "var(--primary)"
-    : hovered
-      ? "color-mix(in oklch, var(--primary) 70%, transparent)"
-      : "color-mix(in oklch, var(--muted-foreground) 40%, transparent)";
+  const strokeColor = simulation
+    ? simulation.kind === "failed"
+      ? "var(--destructive)"
+      : simulation.kind === "buffering"
+        ? "var(--color-amber-500)"
+        : simulation.kind === "congested"
+          ? "var(--color-orange-500)"
+          : simulation.kind === "flowing"
+            ? "var(--primary)"
+            : "color-mix(in oklch, var(--muted-foreground) 25%, transparent)"
+    : selected
+      ? "var(--primary)"
+      : hovered
+        ? "color-mix(in oklch, var(--primary) 70%, transparent)"
+        : "color-mix(in oklch, var(--muted-foreground) 40%, transparent)";
+  const packetColor = simulation?.failed
+    ? "var(--destructive)"
+    : simulation?.buffering
+      ? "var(--color-amber-500)"
+      : "var(--primary)";
 
   return (
     <>
       {/* Invisible fat hit-area for hover */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: SVG path hover hit area */}
       <path
         d={edgePath}
         fill="none"
@@ -86,15 +100,42 @@ function DataFlowEdgeComponent({
         markerEnd={markerEnd}
         style={{
           ...style,
-          strokeWidth: selected ? 2.5 : 1.8,
+          strokeWidth: simulation
+            ? 1.8 + simulation.intensity * 2.2
+            : selected
+              ? 2.5
+              : 1.8,
           stroke: strokeColor,
-          strokeDasharray: "6 4",
-          transition: "stroke 0.2s, stroke-width 0.2s",
+          strokeDasharray: simulation?.failed ? "3 7" : "6 4",
+          opacity: simulation && simulation.kind === "idle" ? 0.35 : 1,
+          transition: "stroke 0.2s, stroke-width 0.2s, opacity 0.2s",
         }}
-        className="animated-dash"
+        className={cn(
+          simulation?.kind === "failed"
+            ? "load-test-edge-failed"
+            : "animated-dash",
+        )}
       />
 
+      {Array.from({ length: packetCount }, (_, index) => (
+        <circle
+          // biome-ignore lint/suspicious/noArrayIndexKey: Fixed index packet circles
+          key={`${id}-packet-${index}`}
+          r={simulation?.failed ? 3.5 : 3}
+          fill={packetColor}
+          className="load-test-packet pointer-events-none"
+        >
+          <animateMotion
+            path={edgePath}
+            dur={`${Math.max(0.65, 2.2 - (simulation?.intensity ?? 0) * 1.2)}s`}
+            begin={`${-(index / Math.max(1, packetCount)) * 2}s`}
+            repeatCount="indefinite"
+          />
+        </circle>
+      ))}
+
       <EdgeLabelRenderer>
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: Edge label wrapper hover */}
         <div
           className="nodrag nopan pointer-events-auto absolute"
           style={{
@@ -106,6 +147,7 @@ function DataFlowEdgeComponent({
           {/* Label or add-label button */}
           {isEditing ? (
             <input
+              // biome-ignore lint/a11y/noAutofocus: Autofocus required for inline editing
               autoFocus
               value={label}
               onChange={(e) => setLabel(e.target.value)}

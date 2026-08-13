@@ -48,7 +48,10 @@ export function NodeSidebar() {
   const groupedNodes = useMemo(() => {
     const groups: Record<string, DesignNode[]> = {};
     for (const node of filteredNodes) {
-      (groups[node.category] ??= []).push(node);
+      if (!groups[node.category]) {
+        groups[node.category] = [];
+      }
+      groups[node.category].push(node);
     }
     return groups;
   }, [filteredNodes]);

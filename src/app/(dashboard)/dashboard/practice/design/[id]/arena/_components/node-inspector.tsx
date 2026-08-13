@@ -1,8 +1,9 @@
 "use client";
 
 import type { Edge, Node } from "@xyflow/react";
-import { Cpu, GitBranch, Link2, PencilLine } from "lucide-react";
+import { Cpu, GitBranch, Link2, PencilLine, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -31,6 +32,8 @@ interface NodeInspectorProps {
     edgeId: string,
     updates: Partial<ArchitectureEdgeData>,
   ) => void;
+  onDeleteNode?: (nodeId: string) => void;
+  onDeleteEdge?: (edgeId: string) => void;
 }
 
 export function NodeInspector({
@@ -38,6 +41,8 @@ export function NodeInspector({
   selectedEdge,
   onUpdateNode,
   onUpdateEdge,
+  onDeleteNode,
+  onDeleteEdge,
 }: NodeInspectorProps) {
   return (
     <aside className="hidden w-80 shrink-0 border-l border-border/40 bg-card/30 xl:flex xl:flex-col">
@@ -168,6 +173,20 @@ export function NodeInspector({
                 placeholder="Why this component exists, scaling approach, failover notes..."
               />
             </InspectorField>
+
+            {onDeleteNode ? (
+              <div className="pt-2 border-t border-border/40">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive cursor-pointer"
+                  onClick={() => onDeleteNode(selectedNode.id)}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Component
+                </Button>
+              </div>
+            ) : null}
           </div>
         ) : selectedEdge ? (
           <div className="space-y-5">
@@ -236,6 +255,20 @@ export function NodeInspector({
                 placeholder="Retries, batching, replication strategy, or queue semantics..."
               />
             </InspectorField>
+
+            {onDeleteEdge ? (
+              <div className="pt-2 border-t border-border/40">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive cursor-pointer"
+                  onClick={() => onDeleteEdge(selectedEdge.id)}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Connection
+                </Button>
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-border/50 bg-background/40 px-6 py-10 text-center">

@@ -41,6 +41,10 @@ import { buildArchitectureNodeData } from "@/lib/design-nodes";
 import { orpc, orpcClient } from "@/lib/orpc-client";
 import { DataFlowEdge } from "./edges/data-flow-edge";
 import { EvaluationResultsSheet } from "./evaluation-results-sheet";
+import { LoadTestVisualizationProvider } from "./load-test/load-test-context";
+import { LoadTestPanel } from "./load-test/load-test-panel";
+import { LoadTestSummary } from "./load-test/load-test-summary";
+import { useLoadTest } from "./load-test/use-load-test";
 import { NodeInspector } from "./node-inspector";
 import { NodeSidebar } from "./node-sidebar";
 import { SystemNode } from "./nodes/system-node";
@@ -80,6 +84,7 @@ function ArenaInner({ problemId }: { problemId: string }) {
     updateEdgeData,
   } = useReactFlow<Node<ArchitectureNodeData>, Edge<ArchitectureEdgeData>>();
 
+  const loadTest = useLoadTest(nodes, edges);
   const [showResults, setShowResults] = useState(false);
   const [evaluationResult, setEvaluationResult] =
     useState<ArchitectureEvaluation | null>(null);
@@ -147,6 +152,29 @@ function ArenaInner({ problemId }: { problemId: string }) {
   const selectedEdge = useMemo(
     () => edges.find((edge) => edge.selected) ?? null,
     [edges],
+  );
+
+  const deleteNode = useCallback(
+    (nodeId: string) => {
+      setNodes((currentNodes) =>
+        currentNodes.filter((node) => node.id !== nodeId),
+      );
+      setEdges((currentEdges) =>
+        currentEdges.filter(
+          (edge) => edge.source !== nodeId && edge.target !== nodeId,
+        ),
+      );
+    },
+    [setNodes, setEdges],
+  );
+
+  const deleteEdge = useCallback(
+    (edgeId: string) => {
+      setEdges((currentEdges) =>
+        currentEdges.filter((edge) => edge.id !== edgeId),
+      );
+    },
+    [setEdges],
   );
 
   const serializedCanvas = useMemo(
@@ -336,108 +364,133 @@ function ArenaInner({ problemId }: { problemId: string }) {
       <NodeSidebar />
 
       <div className="relative flex-1">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onDrop={onDrop}
-          onDragOver={onDragOver}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          defaultEdgeOptions={defaultEdgeOptions}
-          connectionLineStyle={connectionLineStyle}
-          fitView
-          fitViewOptions={{ padding: 0.2 }}
-          className="bg-dot-pattern"
-          proOptions={{ hideAttribution: true }}
-          deleteKeyCode={null}
-          selectionOnDrag
-          selectNodesOnDrag={false}
+        <LoadTestVisualizationProvider
+          result={loadTest.result}
+          running={loadTest.running}
         >
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={24}
-            size={2}
-            className="opacity-40"
-          />
-          <Controls className="overflow-hidden rounded-xl border border-border/50 bg-background shadow-sm" />
-          <MiniMap
-            nodeStrokeWidth={3}
-            zoomable
-            pannable
-            className="rounded-xl!"
-            maskColor="rgba(0, 0, 0, 0.15)"
-          />
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onDrop={onDrop}
+            onDragOver={onDragOver}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            defaultEdgeOptions={defaultEdgeOptions}
+            connectionLineStyle={connectionLineStyle}
+            fitView
+            fitViewOptions={{ padding: 0.2 }}
+            className="bg-dot-pattern"
+            proOptions={{ hideAttribution: true }}
+            deleteKeyCode={["Backspace", "Delete"]}
+            selectionOnDrag
+            selectNodesOnDrag={false}
+          >
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={24}
+              size={2}
+              className="opacity-40"
+            />
+            <Controls className="overflow-hidden rounded-xl border border-border/50 bg-background shadow-sm" />
+            <MiniMap
+              nodeStrokeWidth={3}
+              zoomable
+              pannable
+              className="rounded-xl!"
+              maskColor="rgba(0, 0, 0, 0.15)"
+            />
 
-          <Panel position="top-right" className="m-4">
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-end gap-2">
-                {isLoading && (
-                  <span className="flex items-center rounded-xl border border-border/50 bg-background/80 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur">
-                    <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin text-primary" />
-                    Loading state...
+            <Panel
+              position="top-left"
+              className="m-4 flex flex-col gap-3 z-20 max-w-sm"
+            >
+              <LoadTestPanel
+                selectedRps={loadTest.selectedRps}
+                selectedRpsIndex={loadTest.selectedRpsIndex}
+                running={loadTest.running}
+                hasResult={loadTest.result !== null}
+                hasNodes={nodes.length > 0}
+                summaryVisible={loadTest.summaryVisible}
+                onSelectRpsIndex={loadTest.selectRpsIndex}
+                onRun={loadTest.run}
+                onStop={loadTest.stop}
+                onReset={loadTest.reset}
+                onToggleSummary={loadTest.toggleSummary}
+              />
+            </Panel>
+
+            <Panel position="top-right" className="m-4">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-end gap-2">
+                  {isLoading && (
+                    <span className="flex items-center rounded-xl border border-border/50 bg-background/80 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur">
+                      <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin text-primary" />
+                      Loading state...
+                    </span>
+                  )}
+                  <span className="rounded-xl border border-border/50 bg-background/80 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur">
+                    {saveStatus}
                   </span>
-                )}
-                <span className="rounded-xl border border-border/50 bg-background/80 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur">
-                  {saveStatus}
-                </span>
-              </div>
+                </div>
 
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="cursor-pointer rounded-xl border-border/50 bg-background/80 font-medium shadow-sm backdrop-blur"
-                  onClick={() => {
-                    setNodes([]);
-                    setEdges([]);
-                  }}
-                >
-                  Clear Board
-                </Button>
-                <Button
-                  size="sm"
-                  className="cursor-pointer rounded-xl font-medium shadow-md"
-                  onClick={() => void saveCanvas()}
-                  disabled={isSaving}
-                >
-                  {isSaving ? (
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="mr-2 h-4 w-4" />
-                  )}
-                  Save Progress
-                </Button>
-                <Button
-                  size="sm"
-                  className="cursor-pointer rounded-xl font-medium shadow-md"
-                  onClick={handleEvaluate}
-                  disabled={isStreamingEvaluation}
-                >
-                  {isStreamingEvaluation ? (
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="mr-2 h-4 w-4" />
-                  )}
-                  Submit for Review
-                </Button>
-                {evaluationResult && (
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="cursor-pointer rounded-xl border-border/50 bg-background/80 font-medium shadow-sm backdrop-blur"
+                    onClick={() => {
+                      loadTest.reset();
+                      setNodes([]);
+                      setEdges([]);
+                    }}
+                  >
+                    Clear Board
+                  </Button>
                   <Button
                     size="sm"
-                    variant="outline"
                     className="cursor-pointer rounded-xl font-medium shadow-md"
-                    onClick={() => setShowResults(true)}
+                    onClick={() => void saveCanvas()}
+                    disabled={isSaving}
                   >
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    View Last Review
+                    {isSaving ? (
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-2 h-4 w-4" />
+                    )}
+                    Save Progress
                   </Button>
-                )}
+                  <Button
+                    size="sm"
+                    className="cursor-pointer rounded-xl font-medium shadow-md"
+                    onClick={handleEvaluate}
+                    disabled={isStreamingEvaluation}
+                  >
+                    {isStreamingEvaluation ? (
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="mr-2 h-4 w-4" />
+                    )}
+                    Submit for Review
+                  </Button>
+                  {evaluationResult && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="cursor-pointer rounded-xl font-medium shadow-md"
+                      onClick={() => setShowResults(true)}
+                    >
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      View Last Review
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
-          </Panel>
-        </ReactFlow>
+            </Panel>
+          </ReactFlow>
+        </LoadTestVisualizationProvider>
       </div>
 
       <NodeInspector
@@ -445,6 +498,8 @@ function ArenaInner({ problemId }: { problemId: string }) {
         selectedEdge={selectedEdge}
         onUpdateNode={updateNode}
         onUpdateEdge={updateEdge}
+        onDeleteNode={deleteNode}
+        onDeleteEdge={deleteEdge}
       />
 
       <EvaluationResultsSheet
@@ -455,6 +510,12 @@ function ArenaInner({ problemId }: { problemId: string }) {
         }
         isLoading={isStreamingEvaluation && !streamedObject}
         isStreaming={isStreamingEvaluation}
+      />
+
+      <LoadTestSummary
+        open={loadTest.summaryVisible}
+        onOpenChange={loadTest.dismissSummary}
+        result={loadTest.result}
       />
     </div>
   );

@@ -632,12 +632,7 @@ export default function NewDesignProblemPage() {
             </div>
 
             <div className="flex justify-end pt-2">
-              <Button
-                type="submit"
-                size="lg"
-                className="h-12 rounded-2xl px-8 text-base font-semibold shadow-lg transition-transform hover:scale-[1.02]"
-                disabled={isPending}
-              >
+              <Button type="submit" size="lg" disabled={isPending}>
                 {isPending ? (
                   <>
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />

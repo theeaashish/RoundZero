@@ -1,8 +1,9 @@
-import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
+import { Handle, type Node, type NodeProps, Position } from "@xyflow/react";
 import { memo } from "react";
 import type { ArchitectureNodeData } from "@/lib/architecture-types";
 import { DESIGN_NODES, NODE_CATEGORIES } from "@/lib/design-nodes";
 import { cn } from "@/lib/utils";
+import { useLoadTestVisualization } from "../load-test/load-test-context";
 
 export type SystemNodeData = ArchitectureNodeData;
 
@@ -107,9 +108,11 @@ function getNodeIcon(nodeType: string) {
 const HANDLE_BASE =
   "!h-2.5 !w-2.5 !border-2 !border-background !bg-primary/60 !transition-all hover:!bg-primary hover:!scale-125";
 
-function SystemNodeComponent({ data, selected }: NodeProps<CustomNode>) {
+function SystemNodeComponent({ id, data, selected }: NodeProps<CustomNode>) {
   const colors = getNodeColor(data.type);
   const Icon = getNodeIcon(data.type);
+  const { result, running } = useLoadTestVisualization();
+  const simulation = result?.nodeStates[id];
 
   return (
     <div
@@ -118,6 +121,16 @@ function SystemNodeComponent({ data, selected }: NodeProps<CustomNode>) {
         selected
           ? `border-primary/60 shadow-lg ${colors.glow} ring-1 ring-primary/40`
           : "border-border/50 shadow-sm hover:border-primary/40 hover:shadow-md",
+        simulation?.state === "healthy" &&
+          "border-emerald-500/60 ring-1 ring-emerald-500/20",
+        simulation?.state === "buffering" &&
+          "border-amber-500/70 ring-2 ring-amber-500/25",
+        simulation?.state === "stressed" &&
+          "border-orange-500/80 ring-2 ring-orange-500/25",
+        simulation?.state === "overloaded" &&
+          "border-destructive ring-2 ring-destructive/35 shadow-lg shadow-destructive/20",
+        simulation && !simulation.reachable && "opacity-45 grayscale",
+        running && simulation?.state === "overloaded" && "animate-pulse",
       )}
     >
       {/* 4-directional handles */}
@@ -143,6 +156,24 @@ function SystemNodeComponent({ data, selected }: NodeProps<CustomNode>) {
         className={cn(HANDLE_BASE)}
         id="left"
       />
+
+      {simulation?.reachable && simulation.state !== "idle" ? (
+        <span
+          className={cn(
+            "absolute -right-2 -top-2 z-10 rounded-full border bg-background px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide shadow-sm",
+            simulation.state === "healthy" &&
+              "border-emerald-500/40 text-emerald-600 dark:text-emerald-400",
+            simulation.state === "buffering" &&
+              "border-amber-500/40 text-amber-600 dark:text-amber-400",
+            simulation.state === "stressed" &&
+              "border-orange-500/40 text-orange-600 dark:text-orange-400",
+            simulation.state === "overloaded" &&
+              "border-destructive/50 text-destructive",
+          )}
+        >
+          {simulation.state}
+        </span>
+      ) : null}
 
       {/* Icon container */}
       <div

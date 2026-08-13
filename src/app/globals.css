@@ -519,6 +519,25 @@
   animation: dash-flow 0.8s linear infinite;
 }
 
+.load-test-edge-failed {
+  animation: dash-flow 0.35s linear infinite;
+}
+
+.load-test-packet {
+  filter: drop-shadow(0 0 3px currentColor);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .load-test-packet {
+    display: none;
+  }
+
+  .load-test-edge-failed,
+  .animated-dash {
+    animation: none;
+  }
+}
+
 /* ── React Flow: MiniMap ── */
 .react-flow__minimap {
   border-radius: 0.75rem !important;
