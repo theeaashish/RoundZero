@@ -14,6 +14,38 @@ import { useLoadTestVisualization } from "../load-test/load-test-context";
 
 type DataFlowEdgeType = Edge<ArchitectureEdgeData, "dataFlowEdge">;
 
+const SIMULATION_STROKE_COLORS: Record<string, string> = {
+  failed: "var(--destructive)",
+  buffering: "var(--color-amber-500)",
+  congested: "var(--color-orange-500)",
+  flowing: "var(--primary)",
+  idle: "color-mix(in oklch, var(--muted-foreground) 25%, transparent)",
+};
+
+function getEdgeStrokeColor(
+  simulation?: { kind: string },
+  selected?: boolean,
+  hovered?: boolean,
+): string {
+  if (simulation) {
+    return (
+      SIMULATION_STROKE_COLORS[simulation.kind] ?? SIMULATION_STROKE_COLORS.idle
+    );
+  }
+  if (selected) return "var(--primary)";
+  if (hovered) return "color-mix(in oklch, var(--primary) 70%, transparent)";
+  return "color-mix(in oklch, var(--muted-foreground) 40%, transparent)";
+}
+
+function getPacketColor(simulation?: {
+  failed?: boolean;
+  buffering?: boolean;
+}): string {
+  if (simulation?.failed) return "var(--destructive)";
+  if (simulation?.buffering) return "var(--color-amber-500)";
+  return "var(--primary)";
+}
+
 function DataFlowEdgeComponent({
   id,
   sourceX,
@@ -59,27 +91,8 @@ function DataFlowEdgeComponent({
     );
   }, [id, label, setEdges]);
 
-  // Derive stroke color — use CSS var() directly so oklch values work
-  const strokeColor = simulation
-    ? simulation.kind === "failed"
-      ? "var(--destructive)"
-      : simulation.kind === "buffering"
-        ? "var(--color-amber-500)"
-        : simulation.kind === "congested"
-          ? "var(--color-orange-500)"
-          : simulation.kind === "flowing"
-            ? "var(--primary)"
-            : "color-mix(in oklch, var(--muted-foreground) 25%, transparent)"
-    : selected
-      ? "var(--primary)"
-      : hovered
-        ? "color-mix(in oklch, var(--primary) 70%, transparent)"
-        : "color-mix(in oklch, var(--muted-foreground) 40%, transparent)";
-  const packetColor = simulation?.failed
-    ? "var(--destructive)"
-    : simulation?.buffering
-      ? "var(--color-amber-500)"
-      : "var(--primary)";
+  const strokeColor = getEdgeStrokeColor(simulation, selected, hovered);
+  const packetColor = getPacketColor(simulation);
 
   return (
     <>

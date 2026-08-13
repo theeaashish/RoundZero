@@ -34,14 +34,18 @@ export function LoadTestSummary({
 }: LoadTestSummaryProps) {
   if (!result) return null;
 
-  const riskClass =
-    result.bottleneckRisk === "CRITICAL"
-      ? "border-destructive/50 bg-destructive/10 text-destructive"
-      : result.bottleneckRisk === "HIGH"
-        ? "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400"
-        : result.bottleneckRisk === "MEDIUM"
-          ? "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400"
-          : "border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+  const { bottleneckRisk } = result;
+
+  const riskClass = cn(
+    bottleneckRisk === "CRITICAL" &&
+      "border-destructive/50 bg-destructive/10 text-destructive",
+
+    ["HIGH", "MEDIUM"].includes(bottleneckRisk) &&
+      "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+
+    bottleneckRisk === "LOW" &&
+      "border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
