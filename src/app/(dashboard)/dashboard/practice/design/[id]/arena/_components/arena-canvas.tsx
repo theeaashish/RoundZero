@@ -80,11 +80,32 @@ function ArenaInner({ problemId }: { problemId: string }) {
     getNodes,
     getEdges,
     fitView,
+    setCenter,
     updateNodeData,
     updateEdgeData,
   } = useReactFlow<Node<ArchitectureNodeData>, Edge<ArchitectureEdgeData>>();
 
   const loadTest = useLoadTest(nodes, edges);
+
+  const handleSelectNodeFromSummary = useCallback(
+    (nodeId: string) => {
+      const targetNode = getNodes().find((n) => n.id === nodeId);
+      if (targetNode) {
+        setNodes((nds) =>
+          nds.map((n) => ({
+            ...n,
+            selected: n.id === nodeId,
+          })),
+        );
+        const x =
+          targetNode.position.x + (targetNode.measured?.width ?? 180) / 2;
+        const y =
+          targetNode.position.y + (targetNode.measured?.height ?? 100) / 2;
+        setCenter(x, y, { zoom: 1.15, duration: 500 });
+      }
+    },
+    [getNodes, setCenter, setNodes],
+  );
   const [showResults, setShowResults] = useState(false);
   const [evaluationResult, setEvaluationResult] =
     useState<ArchitectureEvaluation | null>(null);
@@ -410,11 +431,14 @@ function ArenaInner({ problemId }: { problemId: string }) {
               <LoadTestPanel
                 selectedRps={loadTest.selectedRps}
                 selectedRpsIndex={loadTest.selectedRpsIndex}
+                selectedWorkload={loadTest.selectedWorkload}
                 running={loadTest.running}
                 hasResult={loadTest.result !== null}
+                isStale={loadTest.isStale}
                 hasNodes={nodes.length > 0}
                 summaryVisible={loadTest.summaryVisible}
                 onSelectRpsIndex={loadTest.selectRpsIndex}
+                onSelectWorkload={loadTest.setSelectedWorkload}
                 onRun={loadTest.run}
                 onStop={loadTest.stop}
                 onReset={loadTest.reset}
@@ -516,6 +540,7 @@ function ArenaInner({ problemId }: { problemId: string }) {
         open={loadTest.summaryVisible}
         onOpenChange={loadTest.dismissSummary}
         result={loadTest.result}
+        onSelectNode={handleSelectNodeFromSummary}
       />
     </div>
   );

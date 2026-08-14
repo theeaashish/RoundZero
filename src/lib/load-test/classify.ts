@@ -129,3 +129,7 @@ export function nodeLabel(node: LoadTestNodeInput): string {
 export function isAsyncFlowType(flowType: string | undefined): boolean {
   return flowType === "ASYNC" || flowType === "BATCH";
 }
+
+export function isReplicationFlowType(flowType: string | undefined): boolean {
+  return flowType === "REPLICATION";
+}

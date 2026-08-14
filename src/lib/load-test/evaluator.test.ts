@@ -246,3 +246,56 @@ test("empty and edge-less inputs return safe non-throwing results", () => {
   assert.equal(empty.bottleneckRisk, "LOW");
   assert.deepEqual(empty.risks, []);
 });
+
+test("workload profile shifts cache absorption between read-heavy and write-heavy", () => {
+  const nodes = [
+    node("client", "web_client"),
+    node("cache", "redis_cache"),
+    node("db", "relational_db"),
+  ];
+  const edges = [
+    edge("client-cache", "client", "cache"),
+    edge("cache-db", "cache", "db"),
+  ];
+
+  const readHeavy = simulateLoadTest(nodes, edges, 100_000, {
+    workload: "READ_HEAVY",
+  });
+  const writeHeavy = simulateLoadTest(nodes, edges, 100_000, {
+    workload: "WRITE_HEAVY",
+  });
+  const mixed = simulateLoadTest(nodes, edges, 100_000, {
+    workload: "MIXED",
+  });
+
+  // In READ_HEAVY, cache forwards 15% to DB
+  assert.equal(readHeavy.nodeStates.db.incomingRps, 15_000);
+  // In WRITE_HEAVY, cache forwards 85% to DB
+  assert.equal(writeHeavy.nodeStates.db.incomingRps, 85_000);
+  // In MIXED, cache forwards 45% to DB
+  assert.equal(mixed.nodeStates.db.incomingRps, 45_000);
+});
+
+test("replication flow transmits replicated write volume from primary to read replica", () => {
+  const nodes = [
+    node("client", "web_client"),
+    node("primary", "primary_db"),
+    node("replica", "replica"),
+  ];
+  const edges = [
+    edge("client-primary", "client", "primary"),
+    edge("primary-replica", "primary", "replica", "REPLICATION"),
+  ];
+
+  const readResult = simulateLoadTest(nodes, edges, 100_000, {
+    workload: "READ_HEAVY",
+  });
+  const writeResult = simulateLoadTest(nodes, edges, 100_000, {
+    workload: "WRITE_HEAVY",
+  });
+
+  // Replicated stream in read-heavy is 15% write sync
+  assert.equal(readResult.nodeStates.replica.incomingRps, 15_000);
+  // Replicated stream in write-heavy is 85% write sync
+  assert.equal(writeResult.nodeStates.replica.incomingRps, 85_000);
+});

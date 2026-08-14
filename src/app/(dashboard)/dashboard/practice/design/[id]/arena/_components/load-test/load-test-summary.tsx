@@ -25,12 +25,14 @@ interface LoadTestSummaryProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   result: SimulationResult | null;
+  onSelectNode?: (nodeId: string) => void;
 }
 
 export function LoadTestSummary({
   open,
   onOpenChange,
   result,
+  onSelectNode,
 }: LoadTestSummaryProps) {
   if (!result) return null;
 
@@ -122,6 +124,7 @@ export function LoadTestSummary({
                   title="Architectural Strengths"
                   findings={result.strengths}
                   positive
+                  onSelectNode={onSelectNode}
                 />
               ) : null}
 
@@ -130,6 +133,7 @@ export function LoadTestSummary({
                 <FindingSection
                   title="Identified Bottlenecks & Improvements"
                   findings={result.risks}
+                  onSelectNode={onSelectNode}
                 />
               ) : null}
             </div>
@@ -157,10 +161,12 @@ function FindingSection({
   title,
   findings,
   positive = false,
+  onSelectNode,
 }: {
   title: string;
   findings: SimulationResult["risks"];
   positive?: boolean;
+  onSelectNode?: (nodeId: string) => void;
 }) {
   const Icon = positive ? CheckCircle2 : AlertTriangle;
   return (
@@ -184,12 +190,34 @@ function FindingSection({
                 )}
               />
               <div className="flex-1">
-                <h4 className="text-sm font-semibold text-foreground">
-                  {item.title}
-                </h4>
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-sm font-semibold text-foreground">
+                    {item.title}
+                  </h4>
+                </div>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                   {item.detail}
                 </p>
+
+                {/* Clickable Affected Nodes */}
+                {item.nodeIds.length > 0 && onSelectNode ? (
+                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] font-medium text-muted-foreground">
+                      Components:
+                    </span>
+                    {item.nodeIds.map((nodeId) => (
+                      <button
+                        key={nodeId}
+                        type="button"
+                        onClick={() => onSelectNode(nodeId)}
+                        className="cursor-pointer inline-flex items-center rounded-lg border border-border/70 bg-muted/60 px-2 py-0.5 font-mono text-[10px] font-medium text-foreground hover:border-primary/50 hover:bg-primary/10 transition-colors"
+                      >
+                        {nodeId}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
                 {item.suggestion ? (
                   <div className="mt-3 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-foreground">
                     <span className="font-bold text-primary mr-1">

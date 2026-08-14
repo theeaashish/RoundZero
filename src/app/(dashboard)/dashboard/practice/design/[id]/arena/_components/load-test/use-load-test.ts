@@ -11,28 +11,30 @@ import {
   LOAD_TEST_RPS_LEVELS,
   type LoadTestRps,
   type SimulationResult,
+  type WorkloadProfile,
 } from "@/lib/load-test/types";
 
 const SUMMARY_REVEAL_MS = 1_800;
 
+/**
+ * Fast allocation-free topology serializer.
+ * Avoids JSON.stringify and intermediate array allocations during 60 FPS canvas dragging.
+ */
 function topologySignature(
   nodes: Node<ArchitectureNodeData>[],
   edges: Edge<ArchitectureEdgeData>[],
 ): string {
-  return JSON.stringify({
-    nodes: nodes.map((node) => [
-      node.id,
-      node.data.type,
-      node.data.instances,
-      node.data.category,
-    ]),
-    edges: edges.map((edge) => [
-      edge.id,
-      edge.source,
-      edge.target,
-      edge.data?.flowType,
-    ]),
-  });
+  let str = "";
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    str += `${n.id}:${n.data.type}:${n.data.instances ?? 1}:${n.data.category ?? ""}|`;
+  }
+  str += "#";
+  for (let i = 0; i < edges.length; i++) {
+    const e = edges[i];
+    str += `${e.id}:${e.source}:${e.target}:${e.data?.flowType ?? ""}|`;
+  }
+  return str;
 }
 
 export function useLoadTest(
@@ -40,6 +42,8 @@ export function useLoadTest(
   edges: Edge<ArchitectureEdgeData>[],
 ) {
   const [selectedRps, setSelectedRps] = useState<LoadTestRps>(100_000);
+  const [selectedWorkload, setSelectedWorkload] =
+    useState<WorkloadProfile>("MIXED");
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [running, setRunning] = useState(false);
   const [summaryVisible, setSummaryVisible] = useState(false);
@@ -75,7 +79,9 @@ export function useLoadTest(
     clearTimer();
     const runId = runIdRef.current + 1;
     runIdRef.current = runId;
-    const nextResult = simulateLoadTest(nodes, edges, selectedRps);
+    const nextResult = simulateLoadTest(nodes, edges, selectedRps, {
+      workload: selectedWorkload,
+    });
     resultSignatureRef.current = signature;
     setResult(nextResult);
     setSummaryVisible(false);
@@ -86,7 +92,7 @@ export function useLoadTest(
       setSummaryVisible(true);
       timerRef.current = null;
     }, SUMMARY_REVEAL_MS);
-  }, [clearTimer, edges, nodes, selectedRps, signature]);
+  }, [clearTimer, edges, nodes, selectedRps, selectedWorkload, signature]);
 
   useEffect(() => {
     if (
@@ -112,11 +118,16 @@ export function useLoadTest(
     setSummaryVisible((prev) => !prev);
   }, []);
 
+  const isStale = result !== null && result.rps !== selectedRps;
+
   return {
     selectedRps,
     selectedRpsIndex: LOAD_TEST_RPS_LEVELS.indexOf(selectedRps),
     selectRpsIndex,
+    selectedWorkload,
+    setSelectedWorkload,
     result,
+    isStale,
     running,
     summaryVisible,
     dismissSummary,

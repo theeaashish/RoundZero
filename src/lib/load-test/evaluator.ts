@@ -1,3 +1,4 @@
+import { isReplicationFlowType } from "./classify";
 import { analyzeArchitectureGraph, type GraphAnalysis } from "./graph-analysis";
 import { scoreSimulation } from "./scoring";
 import {
@@ -39,6 +40,13 @@ function cacheForwardRatio(workload: WorkloadHint): number {
   if (workload === "READ_HEAVY") return 0.15;
   if (workload === "WRITE_HEAVY") return 0.85;
   if (workload === "MIXED") return 0.45;
+  return 0.35;
+}
+
+function replicationRatio(workload: WorkloadHint): number {
+  if (workload === "READ_HEAVY") return 0.15;
+  if (workload === "WRITE_HEAVY") return 0.85;
+  if (workload === "MIXED") return 0.5;
   return 0.35;
 }
 
@@ -150,14 +158,35 @@ function buildTraffic(
 
     const incoming = incomingByNode.get(id) ?? 0;
     const capacity = nodeCapacity(node.role, node.instances);
-    const outgoing = forwardedRps(node.role, incoming, capacity, workload);
-    const share = outgoing / forwardEdges.length;
-    for (const edge of forwardEdges) {
-      rpsByEdge.set(edge.id, share);
-      incomingByNode.set(
-        edge.target,
-        (incomingByNode.get(edge.target) ?? 0) + share,
-      );
+    const standardEdges = forwardEdges.filter(
+      (edge) => !isReplicationFlowType(edge.data?.flowType),
+    );
+    const replicationEdges = forwardEdges.filter((edge) =>
+      isReplicationFlowType(edge.data?.flowType),
+    );
+
+    if (standardEdges.length > 0) {
+      const outgoing = forwardedRps(node.role, incoming, capacity, workload);
+      const share = outgoing / standardEdges.length;
+      for (const edge of standardEdges) {
+        rpsByEdge.set(edge.id, share);
+        incomingByNode.set(
+          edge.target,
+          (incomingByNode.get(edge.target) ?? 0) + share,
+        );
+      }
+    }
+
+    if (replicationEdges.length > 0) {
+      const replicatedTraffic = incoming * replicationRatio(workload);
+      const share = replicatedTraffic / replicationEdges.length;
+      for (const edge of replicationEdges) {
+        rpsByEdge.set(edge.id, share);
+        incomingByNode.set(
+          edge.target,
+          (incomingByNode.get(edge.target) ?? 0) + share,
+        );
+      }
     }
   }
 

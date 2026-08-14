@@ -31,6 +31,35 @@ export const WORKLOAD_HINTS = [
 
 export type WorkloadHint = (typeof WORKLOAD_HINTS)[number];
 
+export type WorkloadProfile = "MIXED" | "READ_HEAVY" | "WRITE_HEAVY";
+
+export const WORKLOAD_PROFILES: {
+  value: WorkloadProfile;
+  label: string;
+  shortLabel: string;
+  description: string;
+}[] = [
+  {
+    value: "MIXED",
+    label: "Balanced",
+    shortLabel: "Mixed",
+    description: "Standard 50/50 read/write traffic distribution",
+  },
+  {
+    value: "READ_HEAVY",
+    label: "Read-Heavy",
+    shortLabel: "Read",
+    description: "90/10 read-dominated traffic (cache absorbs ~85% of reads)",
+  },
+  {
+    value: "WRITE_HEAVY",
+    label: "Write-Heavy",
+    shortLabel: "Write",
+    description:
+      "10/90 write-intensive traffic (most writes bypass cache to DB)",
+  },
+];
+
 export type ComponentRole =
   | "client"
   | "load_balancer"
