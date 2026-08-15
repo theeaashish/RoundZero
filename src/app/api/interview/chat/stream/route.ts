@@ -13,6 +13,7 @@ import {
   persistWavArchiveAsync,
   SentenceChunker,
   streamInterviewReply,
+  streamOpeningInterviewReply,
   synthesizePcmChunk,
 } from "@/server/routers/interview/service";
 
@@ -22,26 +23,35 @@ export const maxDuration = 60;
 const MAX_MESSAGE_LENGTH = 10_000;
 const MAX_CODE_LENGTH = 50_000;
 
-const interviewChatStreamInput = z.object({
-  interviewId: z.string().uuid("Invalid interview ID"),
-  message: z
-    .string()
-    .trim()
-    .min(1, "Message is required")
-    .max(MAX_MESSAGE_LENGTH, "Message is too long"),
-  codeSnippet: z
-    .string()
-    .max(MAX_CODE_LENGTH, "Code snippet is too long")
-    .optional()
-    .nullable(),
-  language: z
-    .string()
-    .trim()
-    .max(100, "Language is too long")
-    .optional()
-    .nullable(),
-  turnId: z.string().uuid("Invalid turn ID"),
-});
+const interviewChatStreamInput = z
+  .object({
+    interviewId: z.string().uuid("Invalid interview ID"),
+    isOpening: z.boolean().optional(),
+    message: z
+      .string()
+      .trim()
+      .max(MAX_MESSAGE_LENGTH, "Message is too long")
+      .optional(),
+    codeSnippet: z
+      .string()
+      .max(MAX_CODE_LENGTH, "Code snippet is too long")
+      .optional()
+      .nullable(),
+    language: z
+      .string()
+      .trim()
+      .max(100, "Language is too long")
+      .optional()
+      .nullable(),
+    turnId: z.string().uuid("Invalid turn ID"),
+  })
+  .refine(
+    (data) => Boolean(data.isOpening) || (Boolean(data.message) && (data.message?.length ?? 0) > 0),
+    {
+      message: "Message is required when not opening interview",
+      path: ["message"],
+    },
+  );
 
 const cancelInterviewTurnInput = z.object({
   interviewId: z.string().uuid("Invalid interview ID"),
@@ -138,40 +148,65 @@ export async function POST(request: Request) {
     return new Response(null, { status: 499 });
   }
 
-  const [userMessage, history] = await Promise.all([
-    createUserInterviewMessageIfActive({
-      interviewId: interview.id,
-      turnId: input.turnId,
-      content: input.message,
-      codeSnippet: input.codeSnippet ?? undefined,
-      language: input.language || undefined,
-    }),
-    listInterviewMessages(interview.id),
-  ]);
-  if (signal.aborted) {
-    const { clearedActiveTurn } = await cancelInterviewTurn({
-      interviewId: interview.id,
-      userId: context.user.id,
-      turnId: input.turnId,
+  const isOpeningTurn = Boolean(input.isOpening);
+  let userMessage: { id: string; createdAt: Date } | null = null;
+  let mergedHistory: Awaited<ReturnType<typeof listInterviewMessages>> = [];
+
+  if (isOpeningTurn) {
+    const activeInterview = await db.interview.updateMany({
+      where: {
+        id: interview.id,
+        status: INTERVIEW_STATUS.IN_PROGRESS,
+        activeTurnId: null,
+      },
+      data: { activeTurnId: input.turnId },
     });
 
-    if (clearedActiveTurn) {
-      await deleteUserInterviewMessage({
+    if (activeInterview.count === 0) {
+      return Response.json(
+        { error: "A response is already in progress. Please wait for it to finish." },
+        { status: 409 },
+      );
+    }
+  } else {
+    const [createdUserMsg, history] = await Promise.all([
+      createUserInterviewMessageIfActive({
         interviewId: interview.id,
         turnId: input.turnId,
-      });
-    }
-    return new Response(null, { status: 499 });
-  }
+        content: input.message || "",
+        codeSnippet: input.codeSnippet ?? undefined,
+        language: input.language || undefined,
+      }),
+      listInterviewMessages(interview.id),
+    ]);
 
-  if (!userMessage) {
-    const error =
-      interview.status === INTERVIEW_STATUS.IN_PROGRESS
-        ? "A response is already in progress. Please wait for it to finish."
-        : "Interview is no longer in progress";
-    return Response.json({ error }, { status: 409 });
+    if (signal.aborted) {
+      const { clearedActiveTurn } = await cancelInterviewTurn({
+        interviewId: interview.id,
+        userId: context.user.id,
+        turnId: input.turnId,
+      });
+
+      if (clearedActiveTurn) {
+        await deleteUserInterviewMessage({
+          interviewId: interview.id,
+          turnId: input.turnId,
+        });
+      }
+      return new Response(null, { status: 499 });
+    }
+
+    if (!createdUserMsg) {
+      const error =
+        interview.status === INTERVIEW_STATUS.IN_PROGRESS
+          ? "A response is already in progress. Please wait for it to finish."
+          : "Interview is no longer in progress";
+      return Response.json({ error }, { status: 409 });
+    }
+
+    userMessage = createdUserMsg;
+    mergedHistory = mergeInterviewHistory(history, createdUserMsg);
   }
-  const mergedHistory = mergeInterviewHistory(history, userMessage);
 
   const encoder = new TextEncoder();
 
@@ -192,13 +227,17 @@ export async function POST(request: Request) {
       };
 
       try {
-        sendEvent("user-message", {
-          turnId: input.turnId,
-          persistedId: userMessage.id,
-          createdAt: userMessage.createdAt.toISOString(),
-        });
+        if (userMessage) {
+          sendEvent("user-message", {
+            turnId: input.turnId,
+            persistedId: userMessage.id,
+            createdAt: userMessage.createdAt.toISOString(),
+          });
+        }
 
-        const result = streamInterviewReply(interview, mergedHistory);
+        const result = isOpeningTurn
+          ? streamOpeningInterviewReply(interview)
+          : streamInterviewReply(interview, mergedHistory);
         const chunker = new SentenceChunker();
         const completedChunks = new Map<number, SynthesizedChunk>();
         const allPcmBuffers: Buffer[] = [];

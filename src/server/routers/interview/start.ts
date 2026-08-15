@@ -5,8 +5,6 @@ import db from "@/lib/prisma";
 import type { Context } from "@/server/orpc";
 import { INTERVIEW_STATUS } from "./schemas";
 import {
-  generateAndUploadInterviewAudio,
-  generateOpeningInterviewMessage,
   getLatestAssistantMessage,
   interviewMessageSelect,
   serializeInterviewMessage,
@@ -30,14 +28,6 @@ export async function startSession({
     where: { id: input.interviewId, userId: user.id },
     select: {
       id: true,
-      jobTitle: true,
-      resumeText: true,
-      experienceLevel: true,
-      type: true,
-      techStack: true,
-      includeDSA: true,
-      companyName: true,
-      jobDescription: true,
       status: true,
       messages: {
         orderBy: { createdAt: "asc" },
@@ -59,81 +49,18 @@ export async function startSession({
     };
   }
 
-  const openingMessage = await generateOpeningInterviewMessage(interview);
-
-  const sessionState = await db.$transaction(async (tx) => {
-    const currentInterview = await tx.interview.findFirst({
-      where: { id: input.interviewId, userId: user.id },
-      select: {
-        status: true,
-        messages: {
-          orderBy: { createdAt: "asc" },
-          select: interviewMessageSelect,
-        },
-      },
-    });
-
-    if (!currentInterview) {
-      throw new ORPCError("NOT_FOUND", { message: "Interview not found" });
-    }
-
-    const currentAssistantMessage = getLatestAssistantMessage(
-      currentInterview.messages,
-    );
-    if (currentAssistantMessage) {
-      return {
-        assistantMessage: currentAssistantMessage,
-        createdAssistantMessage: false,
-        status: currentInterview.status,
-      };
-    }
-
-    if (currentInterview.status === INTERVIEW_STATUS.SETUP) {
-      await tx.interview.update({
-        where: { id: interview.id, userId: user.id },
-        data: {
-          status: INTERVIEW_STATUS.IN_PROGRESS,
-          activeTurnId: null,
-        },
-      });
-    }
-
-    const assistantMessage = await tx.message.create({
+  if (interview.status === INTERVIEW_STATUS.SETUP) {
+    await db.interview.update({
+      where: { id: interview.id, userId: user.id },
       data: {
-        interviewId: interview.id,
-        role: "assistant",
-        content: openingMessage,
+        status: INTERVIEW_STATUS.IN_PROGRESS,
+        activeTurnId: null,
       },
-      select: interviewMessageSelect,
     });
-
-    return {
-      assistantMessage,
-      createdAssistantMessage: true,
-      status:
-        currentInterview.status === INTERVIEW_STATUS.SETUP
-          ? INTERVIEW_STATUS.IN_PROGRESS
-          : currentInterview.status,
-    };
-  });
-
-  const shouldGenerateAudio =
-    sessionState.createdAssistantMessage ||
-    !sessionState.assistantMessage.audioUrl;
-  const audioUrl = shouldGenerateAudio
-    ? await generateAndUploadInterviewAudio(
-        openingMessage,
-        interview.id,
-        sessionState.assistantMessage.id,
-      )
-    : sessionState.assistantMessage.audioUrl;
+  }
 
   return {
-    assistantMessage: {
-      ...serializeInterviewMessage(sessionState.assistantMessage),
-      audioUrl: audioUrl ?? sessionState.assistantMessage.audioUrl,
-    },
-    status:
-      sessionState.status as (typeof INTERVIEW_STATUS)[keyof typeof INTERVIEW_STATUS],
+    assistantMessage: null,
+    status: INTERVIEW_STATUS.IN_PROGRESS,
   };
 }

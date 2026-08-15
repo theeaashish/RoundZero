@@ -184,8 +184,14 @@ export const InterviewContextProvider = ({
     isAssistantResponding: isResponding,
     onBargeIn: handleBargeIn,
     onUtteranceDispatched: (finalizedText) => {
-      if (status === "IN_PROGRESS" && !isEndingRef.current) {
-        void sendMessage(finalizedText);
+      const trimmed = finalizedText.trim();
+      if (
+        status === "IN_PROGRESS" &&
+        !isEndingRef.current &&
+        !isResponding &&
+        trimmed.length > 1
+      ) {
+        void sendMessage(trimmed);
       }
     },
   });
@@ -240,82 +246,26 @@ export const InterviewContextProvider = ({
       return;
     }
 
-    void connectSTT();
+    void connectSTT().catch((sttError) => {
+      console.error("[Interview Context] Auto-connect STT failed:", sttError);
+    });
   }, [isHydrated, status, connectionState, connectSTT]);
 
-  // Start interview action
-  const startInterview = useCallback(async () => {
-    if (
-      !interviewId ||
-      !isHydrated ||
-      isStartingRef.current ||
-      status !== "SETUP"
-    ) {
-      return;
-    }
-
-    isStartingRef.current = true;
-    void prepareAudio().catch((error) => {
-      console.warn("[Interview Context] Could not prewarm audio:", error);
-    });
-
-    try {
-      const response = await startInterviewMutation({ interviewId });
-      const assistantMessage = response.assistantMessage;
-
-      if (assistantMessage) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: assistantMessage.id,
-            role: "assistant",
-            content: assistantMessage.content,
-            audioUrl: assistantMessage.audioUrl,
-            codeSnippet: assistantMessage.codeSnippet,
-            language: assistantMessage.language,
-            createdAt: new Date(assistantMessage.createdAt),
-          },
-        ]);
-      }
-
-      setStatus(response.status as InterviewStatus);
-
-      if (response.status === "IN_PROGRESS") {
-        try {
-          await connectSTT();
-        } catch (sttError) {
-          console.error("[Interview Context] STT connection failed:", sttError);
-        }
-      }
-
-      if (assistantMessage?.audioUrl) {
-        playAudio(assistantMessage.audioUrl);
-      }
-    } catch (error) {
-      console.error("[Interview Context] Failed to start:", error);
-      toast.error("Failed to start interview");
-    } finally {
-      isStartingRef.current = false;
-    }
-  }, [
-    interviewId,
-    isHydrated,
-    status,
-    startInterviewMutation,
-    connectSTT,
-    playAudio,
-    prepareAudio,
-  ]);
-
-  // Send message action with streaming response
-  const sendMessage = useCallback(
-    async (content: string, options?: SendMessageOptions) => {
-      if (!interviewId || status !== "IN_PROGRESS" || isEndingRef.current) {
+  // Unified streaming turn execution for both opening and subsequent turns
+  const runStreamTurn = useCallback(
+    async (params: {
+      isOpening?: boolean;
+      content?: string;
+      options?: SendMessageOptions;
+    }): Promise<boolean> => {
+      if (!interviewId || isEndingRef.current) {
         return false;
       }
 
-      const trimmedContent = content.trim();
-      if (!trimmedContent) {
+      const { isOpening, content, options } = params;
+      const trimmedContent = content?.trim() || "";
+
+      if (!isOpening && !trimmedContent) {
         return false;
       }
 
@@ -333,19 +283,24 @@ export const InterviewContextProvider = ({
       activeTurnIdRef.current = turnId;
       startStreamingTurn(turnId);
 
-      const userTempId = crypto.randomUUID();
+      const userTempId = isOpening ? null : crypto.randomUUID();
       const assistantTempId = crypto.randomUUID();
-      activeUserTempIdRef.current = userTempId;
+      if (userTempId) {
+        activeUserTempIdRef.current = userTempId;
+      }
 
-      const userMsg: Message = {
-        id: userTempId,
-        role: "user",
-        content: trimmedContent,
-        codeSnippet: options?.codeSnippet ?? null,
-        language: options?.language ?? null,
-        audioUrl: null,
-        createdAt: new Date(),
-      };
+      const newMessages: Message[] = [];
+      if (userTempId && trimmedContent) {
+        newMessages.push({
+          id: userTempId,
+          role: "user",
+          content: trimmedContent,
+          codeSnippet: options?.codeSnippet ?? null,
+          language: options?.language ?? null,
+          audioUrl: null,
+          createdAt: new Date(),
+        });
+      }
 
       const assistantPlaceholder: Message = {
         id: assistantTempId,
@@ -357,13 +312,14 @@ export const InterviewContextProvider = ({
         createdAt: new Date(),
         isTyping: true,
       };
+      newMessages.push(assistantPlaceholder);
 
-      setMessages((prev) => [...prev, userMsg, assistantPlaceholder]);
+      setMessages((prev) => [...prev, ...newMessages]);
       setIsResponding(true);
 
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
-      let userMessagePersisted = false;
+      let userMessagePersisted = Boolean(isOpening);
       let messageCompleted = false;
       let streamErrorMessage: string | null = null;
 
@@ -373,7 +329,8 @@ export const InterviewContextProvider = ({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             interviewId,
-            message: trimmedContent,
+            isOpening: isOpening ? true : undefined,
+            message: trimmedContent || undefined,
             codeSnippet: options?.codeSnippet ?? null,
             language: options?.language ?? null,
             turnId,
@@ -420,7 +377,7 @@ export const InterviewContextProvider = ({
               // Ignore packets if turn was interrupted
               if (activeTurnIdRef.current !== turnId) break;
 
-              if (eventName === "user-message") {
+              if (eventName === "user-message" && userTempId) {
                 userMessagePersisted = true;
                 if (activeUserTempIdRef.current === userTempId) {
                   activeUserTempIdRef.current = null;
@@ -506,8 +463,8 @@ export const InterviewContextProvider = ({
           return false;
         }
 
-        console.error("[Interview Context] Send message error:", error);
-        if (!userMessagePersisted) {
+        console.error("[Interview Context] Stream turn error:", error);
+        if (!userMessagePersisted && userTempId) {
           restoreTranscript(recoverableTranscript);
           setMessages((prev) => prev.filter((msg) => msg.id !== userTempId));
           if (activeUserTempIdRef.current === userTempId) {
@@ -516,7 +473,7 @@ export const InterviewContextProvider = ({
         }
         toast.error(
           userMessagePersisted
-            ? "Your answer was saved, but the AI response failed."
+            ? "The AI response stream failed."
             : "Failed to send message",
         );
         return false;
@@ -532,7 +489,6 @@ export const InterviewContextProvider = ({
     },
     [
       interviewId,
-      status,
       clearTranscript,
       restoreTranscript,
       prepareAudio,
@@ -540,6 +496,87 @@ export const InterviewContextProvider = ({
       queuePcmChunk,
       interruptActiveTurn,
     ],
+  );
+
+  // Start interview action
+  const startInterview = useCallback(async () => {
+    if (
+      !interviewId ||
+      !isHydrated ||
+      isStartingRef.current ||
+      status !== "SETUP"
+    ) {
+      return;
+    }
+
+    isStartingRef.current = true;
+    void prepareAudio().catch((error) => {
+      console.warn("[Interview Context] Could not prewarm audio:", error);
+    });
+
+    try {
+      const response = await startInterviewMutation({ interviewId });
+      const assistantMessage = response.assistantMessage;
+
+      setStatus(response.status as InterviewStatus);
+
+      if (assistantMessage) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === assistantMessage.id)) return prev;
+          return [
+            ...prev,
+            {
+              id: assistantMessage.id,
+              role: "assistant",
+              content: assistantMessage.content,
+              audioUrl: assistantMessage.audioUrl,
+              codeSnippet: assistantMessage.codeSnippet,
+              language: assistantMessage.language,
+              createdAt: new Date(assistantMessage.createdAt),
+            },
+          ];
+        });
+
+        if (assistantMessage.audioUrl) {
+          playAudio(assistantMessage.audioUrl);
+        }
+      } else {
+        // Fast streaming opening turn with TTFT < 500ms
+        await runStreamTurn({ isOpening: true });
+      }
+
+      if (response.status === "IN_PROGRESS") {
+        void connectSTT().catch((sttError) => {
+          console.error("[Interview Context] STT connection failed:", sttError);
+        });
+      }
+    } catch (error) {
+      console.error("[Interview Context] Failed to start:", error);
+      toast.error("Failed to start interview");
+    } finally {
+      isStartingRef.current = false;
+    }
+  }, [
+    interviewId,
+    isHydrated,
+    status,
+    startInterviewMutation,
+    runStreamTurn,
+    connectSTT,
+    playAudio,
+    prepareAudio,
+  ]);
+
+  // Send message action with streaming response
+  const sendMessage = useCallback(
+    async (content: string, options?: SendMessageOptions) => {
+      if (!interviewId || status !== "IN_PROGRESS" || isEndingRef.current) {
+        return false;
+      }
+
+      return runStreamTurn({ content, options });
+    },
+    [interviewId, status, runStreamTurn],
   );
 
   // End interview action

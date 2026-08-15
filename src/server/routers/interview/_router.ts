@@ -31,7 +31,7 @@ export const interviewRouter = {
     .input(startSessionInput)
     .output(
       z.object({
-        assistantMessage: messageSchema,
+        assistantMessage: messageSchema.nullable(),
         status: interviewStatusSchema,
       }),
     )

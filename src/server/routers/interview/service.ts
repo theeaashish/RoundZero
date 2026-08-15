@@ -535,7 +535,7 @@ export class SentenceChunker {
 
     // Sentence terminator (.?! or double newline) not preceded by common abbreviations
     const sentenceRegex =
-      /(?<!\b(?:e\.g|i\.e|etc|vs|dr|mr|ms|v|\d))\s*([.?!]|\n\n)\s+/i;
+      /(?<!\b(?:e\.g|i\.e|etc|vs|dr|mr|ms|v|\d))([.?!]|\n\n)(?:\s+|$)/i;
     const sentenceMatch = sentenceRegex.exec(text);
 
     if (sentenceMatch && wordCount >= (isFirstChunk ? 4 : 8)) {
@@ -692,6 +692,13 @@ export const generateOpeningInterviewMessage = async (
     return DEFAULT_GREETING;
   }
 };
+
+export const streamOpeningInterviewReply = (
+  interview: InterviewPromptContext,
+) =>
+  streamInterviewResponse(buildPromptForInterview(interview), [
+    { role: "user", content: INITIAL_USER_PROMPT },
+  ]);
 
 export const generateInterviewReply = async (
   interview: InterviewPromptContext,
