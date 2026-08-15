@@ -19,6 +19,7 @@ export interface StreamingAudioPlayerState {
   prepare: () => Promise<void>;
   startStreamingTurn: (turnId: string) => void;
   queuePcmChunk: (chunk: PcmChunk) => void;
+  markAudioComplete: (turnId: string) => void;
   playEncodedAudio: (audioUrl: string) => void;
   stop: () => void;
 }
@@ -35,6 +36,7 @@ export const useStreamingAudioPlayer = (): StreamingAudioPlayerState => {
   const expectedChunkIndexRef = useRef(0);
   const activeTurnIdRef = useRef<string | null>(null);
   const isDrainingRef = useRef(false);
+  const isStreamCompleteRef = useRef(false);
 
   const legacyAudioRef = useRef<HTMLAudioElement | null>(null);
   const legacyPlaybackGenerationRef = useRef(0);
@@ -75,6 +77,7 @@ export const useStreamingAudioPlayer = (): StreamingAudioPlayerState => {
     pendingChunksRef.current.clear();
     expectedChunkIndexRef.current = 0;
     nextStartTimeRef.current = 0;
+    isStreamCompleteRef.current = true;
 
     const activeSources = activeSourcesRef.current;
     activeSourcesRef.current = new Set();
@@ -106,8 +109,24 @@ export const useStreamingAudioPlayer = (): StreamingAudioPlayerState => {
     (turnId: string) => {
       stop();
       activeTurnIdRef.current = turnId;
+      isStreamCompleteRef.current = false;
+      setIsPlaying(true);
     },
     [stop],
+  );
+
+  const markAudioComplete = useCallback(
+    (turnId: string) => {
+      if (activeTurnIdRef.current !== turnId) return;
+      isStreamCompleteRef.current = true;
+      if (
+        activeSourcesRef.current.size === 0 &&
+        pendingChunksRef.current.size === 0
+      ) {
+        setIsPlaying(false);
+      }
+    },
+    [],
   );
 
   const scheduleBuffer = useCallback(
@@ -128,7 +147,8 @@ export const useStreamingAudioPlayer = (): StreamingAudioPlayerState => {
         activeSourcesRef.current.delete(source);
         if (
           activeSourcesRef.current.size === 0 &&
-          pendingChunksRef.current.size === 0
+          pendingChunksRef.current.size === 0 &&
+          isStreamCompleteRef.current
         ) {
           setIsPlaying(false);
         }
@@ -299,6 +319,7 @@ export const useStreamingAudioPlayer = (): StreamingAudioPlayerState => {
     prepare,
     startStreamingTurn,
     queuePcmChunk,
+    markAudioComplete,
     playEncodedAudio,
     stop,
   };

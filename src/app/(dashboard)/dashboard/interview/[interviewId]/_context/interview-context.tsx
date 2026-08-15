@@ -170,6 +170,7 @@ export const InterviewContextProvider = ({
     prepareAudio,
     startStreamingTurn,
     queuePcmChunk,
+    markAudioComplete,
     stopAudio,
     isRecording,
     toggleMic,
@@ -189,7 +190,8 @@ export const InterviewContextProvider = ({
         status === "IN_PROGRESS" &&
         !isEndingRef.current &&
         !isResponding &&
-        trimmed.length > 1
+        !isPlaying &&
+        trimmed.length > 2
       ) {
         void sendMessage(trimmed);
       }
@@ -417,6 +419,8 @@ export const InterviewContextProvider = ({
                   sampleRate: data.sampleRate ?? 24000,
                   turnId,
                 });
+              } else if (eventName === "audio-complete") {
+                markAudioComplete(turnId);
               } else if (eventName === "message-complete") {
                 messageCompleted = true;
                 activeTurnIdRef.current = null;
@@ -494,6 +498,7 @@ export const InterviewContextProvider = ({
       prepareAudio,
       startStreamingTurn,
       queuePcmChunk,
+      markAudioComplete,
       interruptActiveTurn,
     ],
   );

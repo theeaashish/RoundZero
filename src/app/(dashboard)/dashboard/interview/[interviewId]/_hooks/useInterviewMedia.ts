@@ -17,6 +17,7 @@ export interface InterviewMediaState {
     sampleRate?: number;
     turnId: string;
   }) => void;
+  markAudioComplete: (turnId: string) => void;
   stopAudio: () => void;
   isRecording: boolean;
   toggleMic: () => Promise<void>;
@@ -58,6 +59,7 @@ export const useInterviewMedia = (
     prepare: prepareAudio,
     startStreamingTurn,
     queuePcmChunk,
+    markAudioComplete,
     isPlaying,
     stop: stopAudio,
   } = useStreamingAudioPlayer();
@@ -85,6 +87,12 @@ export const useInterviewMedia = (
       setInterimTranscript(joinTranscriptSegments(transcriptRef.current, text)),
     onFinalTranscript: (text) => {
       setInterimTranscript(joinTranscriptSegments(transcriptRef.current, text));
+      // Intentional barge-in: Only interrupt when candidate speaks a meaningful phrase (3+ words)
+      const words = text.trim().split(/\s+/).filter(Boolean);
+      if (isPlaying && words.length >= 3) {
+        stopAudio();
+        optionsRef.current?.onBargeIn?.();
+      }
     },
     onUtteranceEnd: (assembledTranscript) => {
       const trimmed = assembledTranscript.trim();
@@ -96,16 +104,15 @@ export const useInterviewMedia = (
         transcriptRef.current = nextTranscript;
         setTranscript(nextTranscript);
         setInterimTranscript("");
-        optionsRef.current?.onUtteranceDispatched?.(nextTranscript);
+        // Do not auto-dispatch candidate turns while AI is actively speaking!
+        if (!isPlaying) {
+          optionsRef.current?.onUtteranceDispatched?.(nextTranscript);
+        }
       }
     },
     onSpeechStarted: () => {
       setInterimTranscript("");
-      // Barge-in: Only interrupt when assistant is actively speaking / playing audio
-      if (isPlaying) {
-        stopAudio();
-        optionsRef.current?.onBargeIn?.();
-      }
+      // Note: Do NOT stopAudio on raw VAD trigger, as laptop speaker output or breaths trigger VAD
     },
   });
 
@@ -191,6 +198,7 @@ export const useInterviewMedia = (
     prepareAudio,
     startStreamingTurn,
     queuePcmChunk,
+    markAudioComplete,
     stopAudio,
     isRecording,
     toggleMic,
