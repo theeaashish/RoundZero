@@ -1,6 +1,10 @@
 import type { Prisma } from "@prisma/client";
 import { Prisma as PrismaNamespace } from "@prisma/client";
-import { textToSpeech } from "@/lib/deepgram";
+import {
+  DEFAULT_INTERVIEW_VOICE,
+  type TTSVoice,
+  textToSpeech,
+} from "@/lib/deepgram";
 import {
   type Report as GeneratedInterviewReport,
   generateInterviewResponse,
@@ -17,6 +21,7 @@ import {
 import { CONTENT_TYPES, storageService } from "@/lib/storage";
 import {
   type CategoryScores,
+  INTERVIEW_STATUS,
   type Report as InterviewReport,
   MESSAGE_ROLES,
 } from "./schemas";
@@ -34,6 +39,7 @@ export const interviewMessageSelect = {
   audioUrl: true,
   codeSnippet: true,
   language: true,
+  turnId: true,
   createdAt: true,
 } satisfies Prisma.MessageSelect;
 
@@ -53,8 +59,6 @@ export type InterviewMessageRecord = Prisma.MessageGetPayload<{
 export type InterviewReportRecord = Prisma.ReportGetPayload<{
   select: typeof interviewReportSelect;
 }>;
-
-const INTERVIEW_AUDIO_CONTENT_TYPE = CONTENT_TYPES.MP3;
 
 type InterviewPromptContext = {
   id: string;
@@ -210,6 +214,19 @@ const buildLiveSessionGuidance = (
   const lastUserAnswer = userMessages.at(-1)?.content;
   const lastAssistantPrompt = assistantMessages.at(-1)?.content;
   const answerCount = userMessages.length;
+
+  const answeredTurnIds = new Set(
+    assistantMessages
+      .map((message) => message.turnId)
+      .filter((turnId): turnId is string => Boolean(turnId)),
+  );
+  const interruptedAnswerCount = userMessages.filter(
+    (message, index) =>
+      index < userMessages.length - 1 &&
+      Boolean(message.turnId) &&
+      !answeredTurnIds.has(message.turnId as string),
+  ).length;
+
   const phase = getInterviewPhase(answerCount);
   const hasCodeSubmission = messages.some((message) =>
     Boolean(message.codeSnippet),
@@ -251,6 +268,11 @@ const buildLiveSessionGuidance = (
 - Current phase: ${phase}
 - Code shared: ${hasCodeSubmission ? "Yes" : "No"}
 - DSA covered: ${hasDSACoverage ? "Yes" : "No"}
+- Interrupted answers: ${
+    interruptedAnswerCount > 0
+      ? `${interruptedAnswerCount} (the candidate cut off an earlier response mid-stream)`
+      : "None"
+  }
 - Most recent interviewer prompt: ${normalizeSnippet(lastAssistantPrompt)}
 - Most recent candidate answer: ${normalizeSnippet(lastUserAnswer)}
 - Immediate objective: ${nextObjective}
@@ -259,6 +281,7 @@ const buildLiveSessionGuidance = (
 - Do not restart the interview or repeat earlier setup questions.
 - Build on the most recent answer before moving to a new area.
 - If the candidate is vague, ask one concise follow-up for specifics.
+- If an earlier answer was interrupted, the candidate's latest message extends or replaces it — respond to the latest message and do not re-ask what was already covered.
 - Keep the interview realistic: one question at a time, natural transitions, no monologues.
 - When relevant, reference the candidate's prior answer explicitly so the conversation feels continuous.`;
 };
@@ -301,6 +324,112 @@ export const createUserInterviewMessage = async (input: {
     select: interviewMessageSelect,
   });
 
+export const createUserInterviewMessageIfActive = async (input: {
+  interviewId: string;
+  turnId: string;
+  content: string;
+  codeSnippet?: string;
+  language?: string;
+}): Promise<InterviewMessageRecord | null> =>
+  db.$transaction(async (tx) => {
+    const existingMessage = await tx.message.findFirst({
+      where: {
+        interviewId: input.interviewId,
+        turnId: input.turnId,
+        role: MESSAGE_ROLES.USER,
+      },
+      select: interviewMessageSelect,
+    });
+    if (existingMessage) {
+      return null;
+    }
+
+    const activeInterview = await tx.interview.updateMany({
+      where: {
+        id: input.interviewId,
+        status: INTERVIEW_STATUS.IN_PROGRESS,
+        activeTurnId: null,
+      },
+      data: { activeTurnId: input.turnId },
+    });
+
+    if (activeInterview.count === 0) {
+      return null;
+    }
+
+    return tx.message.create({
+      data: {
+        interviewId: input.interviewId,
+        turnId: input.turnId,
+        role: MESSAGE_ROLES.USER,
+        content: input.content,
+        codeSnippet: input.codeSnippet,
+        language: input.language,
+      },
+      select: interviewMessageSelect,
+    });
+  });
+
+export const cancelInterviewTurn = async (input: {
+  interviewId: string;
+  userId: string;
+  turnId: string;
+}): Promise<{
+  userMessage: InterviewMessageRecord | null;
+  clearedActiveTurn: boolean;
+}> =>
+  db.$transaction(async (tx) => {
+    const interview = await tx.interview.findFirst({
+      where: { id: input.interviewId, userId: input.userId },
+      select: { id: true },
+    });
+    if (!interview) return { userMessage: null, clearedActiveTurn: false };
+
+    const cleared = await tx.interview.updateMany({
+      where: {
+        id: input.interviewId,
+        userId: input.userId,
+        activeTurnId: input.turnId,
+      },
+      data: { activeTurnId: null },
+    });
+
+    await tx.message.deleteMany({
+      where: {
+        interviewId: input.interviewId,
+        turnId: input.turnId,
+        role: MESSAGE_ROLES.ASSISTANT,
+      },
+    });
+
+    const userMessage = await tx.message.findFirst({
+      where: {
+        interviewId: input.interviewId,
+        turnId: input.turnId,
+        role: MESSAGE_ROLES.USER,
+      },
+      select: interviewMessageSelect,
+    });
+
+    return {
+      userMessage,
+      clearedActiveTurn: cleared.count > 0,
+    };
+  });
+
+export const deleteUserInterviewMessage = async (input: {
+  interviewId: string;
+  turnId: string;
+}): Promise<void> => {
+  await db.message.deleteMany({
+    where: {
+      interviewId: input.interviewId,
+      turnId: input.turnId,
+      role: MESSAGE_ROLES.USER,
+    },
+  });
+};
+
 export const createAssistantInterviewMessage = async (input: {
   interviewId: string;
   content: string;
@@ -316,6 +445,206 @@ export const createAssistantInterviewMessage = async (input: {
     select: interviewMessageSelect,
   });
 
+export const createAssistantInterviewMessageIfActive = async (input: {
+  interviewId: string;
+  turnId: string;
+  content: string;
+}): Promise<InterviewMessageRecord | null> =>
+  db.$transaction(async (tx) => {
+    const existingMessage = await tx.message.findFirst({
+      where: {
+        interviewId: input.interviewId,
+        turnId: input.turnId,
+        role: MESSAGE_ROLES.ASSISTANT,
+      },
+      select: interviewMessageSelect,
+    });
+    if (existingMessage) {
+      return existingMessage;
+    }
+
+    const activeInterview = await tx.interview.updateMany({
+      where: {
+        id: input.interviewId,
+        status: INTERVIEW_STATUS.IN_PROGRESS,
+        activeTurnId: input.turnId,
+      },
+      data: { activeTurnId: null },
+    });
+
+    if (activeInterview.count === 0) {
+      return null;
+    }
+
+    return tx.message.create({
+      data: {
+        interviewId: input.interviewId,
+        turnId: input.turnId,
+        role: MESSAGE_ROLES.ASSISTANT,
+        content: input.content,
+      },
+      select: interviewMessageSelect,
+    });
+  });
+
+export class SentenceChunker {
+  private buffer = "";
+  private chunkCount = 0;
+
+  processDelta(delta: string): string[] {
+    this.buffer += delta;
+    const chunks: string[] = [];
+
+    while (this.buffer.length > 0) {
+      const match = this.findBoundary(this.buffer, this.chunkCount === 0);
+      if (!match) break;
+
+      const chunkText = this.buffer.slice(0, match.index).trim();
+      this.buffer = this.buffer.slice(match.index).trimStart();
+
+      if (chunkText) {
+        const cleaned = cleanTextForTTS(chunkText);
+        if (cleaned) {
+          chunks.push(cleaned);
+          this.chunkCount++;
+        }
+      }
+    }
+
+    return chunks;
+  }
+
+  flush(): string | null {
+    const remaining = cleanTextForTTS(this.buffer.trim());
+    this.buffer = "";
+    if (remaining) {
+      this.chunkCount++;
+      return remaining;
+    }
+    return null;
+  }
+
+  private findBoundary(
+    text: string,
+    isFirstChunk: boolean,
+  ): { index: number } | null {
+    const trimmed = text.trim();
+    if (!trimmed) return null;
+    const words = trimmed.split(/\s+/);
+    const wordCount = words.length;
+
+    // Sentence terminator (.?! or double newline) not preceded by common abbreviations
+    const sentenceRegex =
+      /(?<!\b(?:e\.g|i\.e|etc|vs|dr|mr|ms|v|\d))\s*([.?!]|\n\n)\s+/i;
+    const sentenceMatch = sentenceRegex.exec(text);
+
+    if (sentenceMatch && wordCount >= (isFirstChunk ? 4 : 8)) {
+      return { index: sentenceMatch.index + sentenceMatch[1].length };
+    }
+
+    // For the first chunk, allow splitting at strong clause markers after 6 words for low TTFB
+    if (isFirstChunk && wordCount >= 6) {
+      const clauseRegex = /(?<!\b(?:e\.g|i\.e|etc|vs))\s*([,;:\n—])\s+/i;
+      const clauseMatch = clauseRegex.exec(text);
+      if (clauseMatch) {
+        return { index: clauseMatch.index + clauseMatch[1].length };
+      }
+    }
+
+    // Safety fallback: If buffer grows beyond 25 words without punctuation, break at the next word boundary
+    if (wordCount >= 25) {
+      const lastSpaceIndex = text.lastIndexOf(" ");
+      if (lastSpaceIndex > 0) {
+        return { index: lastSpaceIndex };
+      }
+    }
+
+    return null;
+  }
+}
+
+export function createWavBuffer(
+  pcmBuffer: Buffer,
+  sampleRate = 24000,
+  numChannels = 1,
+  bitsPerSample = 16,
+): Buffer {
+  const header = Buffer.alloc(44);
+  const dataLength = pcmBuffer.length;
+  const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
+  const blockAlign = (numChannels * bitsPerSample) / 8;
+
+  // RIFF chunk descriptor
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + dataLength, 4);
+  header.write("WAVE", 8);
+
+  // fmt sub-chunk
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20); // PCM
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+
+  // data sub-chunk
+  header.write("data", 36);
+  header.writeUInt32LE(dataLength, 40);
+
+  return Buffer.concat([header, pcmBuffer]);
+}
+
+export const synthesizePcmChunk = async (
+  text: string,
+  options?: {
+    voice?: TTSVoice;
+    signal?: AbortSignal;
+  },
+): Promise<Buffer> => {
+  const cleanedText = cleanTextForTTS(text);
+  if (!cleanedText || options?.signal?.aborted) return Buffer.alloc(0);
+
+  return textToSpeech(` ${cleanedText}`, {
+    voice: options?.voice ?? DEFAULT_INTERVIEW_VOICE,
+    encoding: "linear16",
+    container: "none",
+    signal: options?.signal,
+  });
+};
+
+export const persistWavArchiveAsync = async (
+  pcmChunks: Buffer[],
+  interviewId: string,
+  messageId: string,
+): Promise<string | undefined> => {
+  try {
+    const rawPcm = Buffer.concat(pcmChunks);
+    if (rawPcm.length === 0) return undefined;
+
+    const wavBuffer = createWavBuffer(rawPcm, 24000, 1, 16);
+
+    await storageService.uploadInterviewAudio(
+      wavBuffer,
+      interviewId,
+      messageId,
+      CONTENT_TYPES.WAV,
+    );
+
+    const audioUrl = getInterviewAudioUrl(messageId);
+    await db.message.update({
+      where: { id: messageId },
+      data: { audioUrl },
+    });
+
+    return audioUrl;
+  } catch (error) {
+    console.error("[WAV Archive Error]", { error, interviewId, messageId });
+    return undefined;
+  }
+};
+
 const getInterviewAudioUrl = (messageId: string) =>
   `/api/media/tts/${encodeURIComponent(messageId)}`;
 
@@ -326,15 +655,16 @@ export const generateAndUploadInterviewAudio = async (
 ): Promise<string | undefined> => {
   try {
     const cleanedText = cleanTextForTTS(text);
-    const audioBuffer = await textToSpeech(` ${cleanedText}`, {
-      encoding: "mp3",
-    });
+    const pcmBuffer = await synthesizePcmChunk(cleanedText);
+    if (pcmBuffer.length === 0) return undefined;
+
+    const wavBuffer = createWavBuffer(pcmBuffer, 24000, 1, 16);
 
     await storageService.uploadInterviewAudio(
-      audioBuffer,
+      wavBuffer,
       interviewId,
       messageId,
-      INTERVIEW_AUDIO_CONTENT_TYPE,
+      CONTENT_TYPES.WAV,
     );
 
     const audioUrl = getInterviewAudioUrl(messageId);

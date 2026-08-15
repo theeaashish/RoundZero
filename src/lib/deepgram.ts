@@ -57,7 +57,7 @@ export type TTSEncoding =
   | "mulaw";
 export type TTSContainer = "wav" | "ogg" | "none";
 
-type TTSVoiceOption = { voice?: TTSVoice };
+type TTSVoiceOption = { voice?: TTSVoice; signal?: AbortSignal };
 
 export type TTSOptions = TTSVoiceOption &
   (
@@ -102,31 +102,33 @@ export const textToSpeech = async (
       ? undefined
       : (options.container ??
         (encoding === "linear16" ? DEFAULT_TTS_OPTIONS.container : undefined));
+  const searchParams = new URLSearchParams({ model: voice, encoding });
+  if (container) {
+    searchParams.set("container", container);
+  }
 
-  const response = await deepgram.speak.request(
-    { text },
+  const response = await fetch(
+    `https://api.deepgram.com/v1/speak?${searchParams.toString()}`,
     {
-      model: voice,
-      encoding,
-      ...(container ? { container } : {}),
+      method: "POST",
+      headers: {
+        Authorization: `Token ${env.DEEPGRAM_API_KEY}`,
+        Accept: "audio/*",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text }),
+      signal: options.signal,
     },
   );
 
-  const stream = await response.getStream();
-  if (!stream) {
-    throw new Error("TTS generation failed: No stream returned from Deepgram");
+  if (!response.ok) {
+    const details = await response.text().catch(() => "");
+    throw new Error(
+      `TTS generation failed (${response.status})${details ? `: ${details}` : ""}`,
+    );
   }
 
-  const reader = stream.getReader();
-  const chunks: Uint8Array[] = [];
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-  }
-
-  return Buffer.concat(chunks);
+  return Buffer.from(await response.arrayBuffer());
 };
 
 // Create a temporary API key for client-side STT

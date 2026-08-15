@@ -21,6 +21,10 @@ export const CONTENT_TYPES = {
   DOCX: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 } as const;
 
+type InterviewAudioContentType =
+  | typeof CONTENT_TYPES.WAV
+  | typeof CONTENT_TYPES.MP3;
+
 export interface UploadOptions {
   contentType: string;
   metadata?: Record<string, string>;
@@ -31,8 +35,12 @@ export interface UploadResult {
   url: string;
 }
 
-export const getInterviewAudioKey = (interviewId: string, messageId: string) =>
-  `${STORAGE_PATHS.INTERVIEWS}/${interviewId}/${STORAGE_PATHS.AUDIO}/${messageId}.mp3`;
+export const getInterviewAudioKey = (
+  interviewId: string,
+  messageId: string,
+  extension: "wav" | "mp3" = "wav",
+) =>
+  `${STORAGE_PATHS.INTERVIEWS}/${interviewId}/${STORAGE_PATHS.AUDIO}/${messageId}.${extension}`;
 
 // Storage service for S3 operations
 export const storageService = {
@@ -66,9 +74,10 @@ export const storageService = {
     buffer: Buffer,
     interviewId: string,
     messageId: string,
-    contentType: string = CONTENT_TYPES.MP3,
+    contentType: InterviewAudioContentType = CONTENT_TYPES.WAV,
   ): Promise<string> {
-    const key = getInterviewAudioKey(interviewId, messageId);
+    const extension = contentType === CONTENT_TYPES.MP3 ? "mp3" : "wav";
+    const key = getInterviewAudioKey(interviewId, messageId, extension);
 
     await S3.send(
       new PutObjectCommand({

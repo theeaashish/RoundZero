@@ -50,52 +50,75 @@ export async function endSession({
     };
   }
 
-  const history = await listInterviewMessages(interview.id);
-  const reportData = await generateInterviewReportData(history);
-  const reportPayload = toPersistableReportData(reportData);
-
-  const persistedReport = await db.$transaction(async (tx) => {
-    await tx.interview.update({
-      where: { id: interview.id, userId: user.id },
-      data: {
-        durationSec: Math.max(interview.durationSec, input.durationSec),
-        endedAt: interview.endedAt ?? new Date(),
-        status: INTERVIEW_STATUS.COMPLETED,
-      },
-    });
-
-    const existingReport = await tx.report.findUnique({
-      where: { interviewId: interview.id },
-      select: interviewReportSelect,
-    });
-
-    if (existingReport) {
-      return existingReport;
-    }
-
-    try {
-      return await tx.report.create({
-        data: {
-          interviewId: interview.id,
-          ...reportPayload,
-        },
-        select: interviewReportSelect,
-      });
-    } catch (error) {
-      if (isUniqueConstraintError(error)) {
-        const concurrentReport = await tx.report.findUnique({
-          where: { interviewId: interview.id },
-          select: interviewReportSelect,
-        });
-
-        if (concurrentReport) {
-          return concurrentReport;
-        }
-      }
-
-      throw error;
-    }
+  // Close the interview before reading history. This serializes with streamed
+  // assistant persistence, so the report cannot miss a turn that is finishing.
+  await db.interview.update({
+    where: { id: interview.id, userId: user.id },
+    data: {
+      durationSec: Math.max(interview.durationSec, input.durationSec),
+      endedAt: interview.endedAt ?? new Date(),
+      status: INTERVIEW_STATUS.COMPLETED,
+      activeTurnId: null,
+    },
   });
 
-  return { report: serializeInterviewReport(persistedReport) };
+  try {
+    const history = await listInterviewMessages(interview.id);
+    const reportData = await generateInterviewReportData(history);
+    const reportPayload = toPersistableReportData(reportData);
+
+    const persistedReport = await db.$transaction(async (tx) => {
+      const existingReport = await tx.report.findUnique({
+        where: { interviewId: interview.id },
+        select: interviewReportSelect,
+      });
+
+      if (existingReport) {
+        return existingReport;
+      }
+
+      try {
+        return await tx.report.create({
+          data: {
+            interviewId: interview.id,
+            ...reportPayload,
+          },
+          select: interviewReportSelect,
+        });
+      } catch (error) {
+        if (isUniqueConstraintError(error)) {
+          const concurrentReport = await tx.report.findUnique({
+            where: { interviewId: interview.id },
+            select: interviewReportSelect,
+          });
+
+          if (concurrentReport) {
+            return concurrentReport;
+          }
+        }
+
+        throw error;
+      }
+    });
+
+    return { report: serializeInterviewReport(persistedReport) };
+  } catch (error) {
+    // Report generation failed after the interview was closed. Reopen the
+    // interview so the user can retry ending it (or continue the session)
+    // instead of leaving it COMPLETED with no report.
+    console.error("[Interview End Error]", error);
+    try {
+      await db.interview.update({
+        where: { id: interview.id, userId: user.id },
+        data: {
+          endedAt: null,
+          status: INTERVIEW_STATUS.IN_PROGRESS,
+          activeTurnId: null,
+        },
+      });
+    } catch (revertError) {
+      console.error("[Interview End Revert Error]", revertError);
+    }
+    throw error;
+  }
 }

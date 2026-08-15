@@ -14,7 +14,7 @@ export interface LiveSTTOptions {
   onFinalTranscript?: (text: string) => void;
   onUtteranceEnd?: (assembledTranscript: string) => void;
   onSpeechStarted?: () => void;
-  utteranceTimeoutMs?: number; // Configurable silence timeout to detect end of speech
+  utteranceTimeoutMs?: number;
 }
 
 export interface LiveSTTState {
@@ -28,8 +28,12 @@ export interface LiveSTTState {
 }
 
 const DEEPGRAM_WSS_BASE = "wss://api.deepgram.com/v1/listen";
-const DEEPGRAM_ENDPOINTING_MS = 700;
-const DEFAULT_UTTERANCE_TIMEOUT_MS = 900;
+const DEEPGRAM_ENDPOINTING_MS = 2000;
+const DEEPGRAM_UTTERANCE_END_MS = 2000;
+const DEFAULT_DEADMAN_TIMEOUT_MS = 3000;
+const RECORDER_TIMESLICE_MS = 100;
+const CONNECTION_TIMEOUT_MS = 10_000;
+const KEEP_ALIVE_INTERVAL_MS = 8000;
 
 const DEEPGRAM_PARAMS = new URLSearchParams({
   model: "nova-3",
@@ -37,6 +41,8 @@ const DEEPGRAM_PARAMS = new URLSearchParams({
   smart_format: "true",
   interim_results: "true",
   endpointing: DEEPGRAM_ENDPOINTING_MS.toString(),
+  utterance_end_ms: DEEPGRAM_UTTERANCE_END_MS.toString(),
+  vad_events: "true",
 }).toString();
 
 const AUDIO_CONSTRAINTS: MediaTrackConstraints = {
@@ -45,8 +51,6 @@ const AUDIO_CONSTRAINTS: MediaTrackConstraints = {
   autoGainControl: true,
 };
 
-const RECORDER_TIMESLICE_MS = 200;
-
 function getSupportedMimeType(): string {
   const types = [
     "audio/webm;codecs=opus",
@@ -54,15 +58,14 @@ function getSupportedMimeType(): string {
     "audio/mp4",
     "audio/ogg;codecs=opus",
   ];
-  for (const type of types) {
-    if (
-      typeof MediaRecorder !== "undefined" &&
-      MediaRecorder.isTypeSupported(type)
-    ) {
-      return type;
-    }
-  }
-  return "";
+
+  return (
+    types.find(
+      (type) =>
+        typeof MediaRecorder !== "undefined" &&
+        MediaRecorder.isTypeSupported(type),
+    ) ?? ""
+  );
 }
 
 export const useLiveSTT = (options: LiveSTTOptions = {}): LiveSTTState => {
@@ -74,208 +77,308 @@ export const useLiveSTT = (options: LiveSTTOptions = {}): LiveSTTState => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const keepAliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const deadmanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectionGenerationRef = useRef(0);
+  const connectAttemptRef = useRef<Promise<void> | null>(null);
 
-  const assembledTranscriptRef = useRef<string>("");
-  const utterancePreviewRef = useRef<string>("");
-  const utteranceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
+  const assembledTranscriptRef = useRef("");
+  const utterancePreviewRef = useRef("");
   const isSpeakingRef = useRef(false);
+  const speechStartNotifiedRef = useRef(false);
 
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
+  const resetUtterance = useCallback(() => {
+    assembledTranscriptRef.current = "";
+    utterancePreviewRef.current = "";
+    isSpeakingRef.current = false;
+    speechStartNotifiedRef.current = false;
+  }, []);
+
   const finalizeCurrentUtterance = useCallback(() => {
-    if (utteranceTimeoutRef.current) {
-      clearTimeout(utteranceTimeoutRef.current);
-      utteranceTimeoutRef.current = null;
+    if (deadmanTimeoutRef.current) {
+      clearTimeout(deadmanTimeoutRef.current);
+      deadmanTimeoutRef.current = null;
     }
 
     const assembled = (
       utterancePreviewRef.current || assembledTranscriptRef.current
     ).trim();
+    resetUtterance();
 
     if (assembled) {
       optionsRef.current.onUtteranceEnd?.(assembled);
     }
 
-    assembledTranscriptRef.current = "";
-    utterancePreviewRef.current = "";
-    isSpeakingRef.current = false;
     return assembled;
-  }, []);
+  }, [resetUtterance]);
 
-  const triggerUtteranceEnd = useCallback(() => {
-    finalizeCurrentUtterance();
+  const resetDeadmanTimeout = useCallback(() => {
+    if (deadmanTimeoutRef.current) {
+      clearTimeout(deadmanTimeoutRef.current);
+    }
+    deadmanTimeoutRef.current = setTimeout(
+      finalizeCurrentUtterance,
+      optionsRef.current.utteranceTimeoutMs ?? DEFAULT_DEADMAN_TIMEOUT_MS,
+    );
   }, [finalizeCurrentUtterance]);
 
-  const resetUtteranceTimeout = useCallback(() => {
-    if (utteranceTimeoutRef.current) {
-      clearTimeout(utteranceTimeoutRef.current);
-    }
-    utteranceTimeoutRef.current = setTimeout(() => {
-      triggerUtteranceEnd();
-    }, optionsRef.current.utteranceTimeoutMs ?? DEFAULT_UTTERANCE_TIMEOUT_MS);
-  }, [triggerUtteranceEnd]);
-
   const cleanup = useCallback(() => {
-    if (keepAliveRef.current) clearInterval(keepAliveRef.current);
-    if (utteranceTimeoutRef.current) clearTimeout(utteranceTimeoutRef.current);
+    connectionGenerationRef.current += 1;
 
-    if (
-      mediaRecorderRef.current &&
-      mediaRecorderRef.current.state !== "inactive"
-    ) {
-      mediaRecorderRef.current.stop();
+    if (keepAliveRef.current) {
+      clearInterval(keepAliveRef.current);
+    }
+    if (deadmanTimeoutRef.current) {
+      clearTimeout(deadmanTimeoutRef.current);
     }
 
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => {
-        track.stop();
-      });
-    }
-
-    if (
-      wsRef.current &&
-      (wsRef.current.readyState === WebSocket.OPEN ||
-        wsRef.current.readyState === WebSocket.CONNECTING)
-    ) {
-      wsRef.current.close();
-    }
-
-    wsRef.current = null;
+    const mediaRecorder = mediaRecorderRef.current;
     mediaRecorderRef.current = null;
-    streamRef.current = null;
-    keepAliveRef.current = null;
-    utteranceTimeoutRef.current = null;
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      mediaRecorder.ondataavailable = null;
+      mediaRecorder.stop();
+    }
 
+    const stream = streamRef.current;
+    streamRef.current = null;
+    stream?.getTracks().forEach((track) => {
+      track.stop();
+    });
+
+    const ws = wsRef.current;
+    wsRef.current = null;
+    if (ws) {
+      ws.onopen = null;
+      ws.onmessage = null;
+      ws.onerror = null;
+      ws.onclose = null;
+      if (
+        ws.readyState === WebSocket.OPEN ||
+        ws.readyState === WebSocket.CONNECTING
+      ) {
+        ws.close();
+      }
+    }
+
+    keepAliveRef.current = null;
+    deadmanTimeoutRef.current = null;
     setIsRecording(false);
-    isSpeakingRef.current = false;
-    assembledTranscriptRef.current = "";
-    utterancePreviewRef.current = "";
-  }, []);
+    resetUtterance();
+  }, [resetUtterance]);
 
   const pauseMic = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getAudioTracks().forEach((track) => {
-        track.enabled = false;
-      });
-    }
+    streamRef.current?.getAudioTracks().forEach((track) => {
+      track.enabled = false;
+    });
     setIsRecording(false);
   }, []);
 
   const resumeMic = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getAudioTracks().forEach((track) => {
-        track.enabled = true;
-      });
-    }
-    assembledTranscriptRef.current = "";
-    utterancePreviewRef.current = "";
-    isSpeakingRef.current = false;
-    setIsRecording(true);
-  }, []);
+    streamRef.current?.getAudioTracks().forEach((track) => {
+      track.enabled = true;
+    });
+    resetUtterance();
+    setIsRecording(Boolean(streamRef.current));
+  }, [resetUtterance]);
 
-  const connect = useCallback(async () => {
-    if (connectionState === "connecting" || connectionState === "connected")
-      return;
-
+  const runConnectAttempt = useCallback(async () => {
+    const generation = connectionGenerationRef.current + 1;
+    connectionGenerationRef.current = generation;
     setConnectionState("connecting");
 
     try {
       const { apiKey } = await orpcClient.media.deepgramToken({});
+      if (connectionGenerationRef.current !== generation) return;
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: AUDIO_CONSTRAINTS,
       });
+      if (connectionGenerationRef.current !== generation) {
+        stream.getTracks().forEach((track) => {
+          track.stop();
+        });
+        return;
+      }
       streamRef.current = stream;
 
-      const wsUrl = `${DEEPGRAM_WSS_BASE}?${DEEPGRAM_PARAMS}`;
-      const ws = new WebSocket(wsUrl, ["token", apiKey]);
+      const ws = new WebSocket(`${DEEPGRAM_WSS_BASE}?${DEEPGRAM_PARAMS}`, [
+        "token",
+        apiKey,
+      ]);
       wsRef.current = ws;
 
       await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error("Timeout")), 10000);
+        const timeout = setTimeout(() => {
+          reject(new Error("Deepgram connection timed out"));
+        }, CONNECTION_TIMEOUT_MS);
+
         ws.onopen = () => {
           clearTimeout(timeout);
           resolve();
         };
         ws.onerror = () => {
           clearTimeout(timeout);
-          reject(new Error("Failed"));
+          reject(new Error("Failed to connect to Deepgram"));
+        };
+        ws.onclose = () => {
+          clearTimeout(timeout);
+          reject(new Error("Deepgram closed before connecting"));
         };
       });
 
-      setConnectionState("connected");
+      if (
+        connectionGenerationRef.current !== generation ||
+        wsRef.current !== ws
+      ) {
+        return;
+      }
+      if (ws.readyState !== WebSocket.OPEN) {
+        throw new Error("Deepgram closed during connection setup");
+      }
 
       ws.onmessage = (event) => {
+        if (
+          connectionGenerationRef.current !== generation ||
+          wsRef.current !== ws
+        ) {
+          return;
+        }
+
         try {
           const data = JSON.parse(event.data);
 
-          if (data.type === "Results" && data.channel?.alternatives?.[0]) {
-            const alternative = data.channel.alternatives[0];
-            const transcript = alternative.transcript;
-
-            if (transcript) {
-              if (!isSpeakingRef.current) {
-                isSpeakingRef.current = true;
-                optionsRef.current.onSpeechStarted?.();
-              }
-
-              if (data.is_final) {
-                assembledTranscriptRef.current =
-                  `${assembledTranscriptRef.current} ${transcript}`.trim();
-                utterancePreviewRef.current = assembledTranscriptRef.current;
-                optionsRef.current.onFinalTranscript?.(
-                  utterancePreviewRef.current,
-                );
-              } else {
-                const interim =
-                  `${assembledTranscriptRef.current} ${transcript}`.trim();
-                utterancePreviewRef.current = interim;
-                optionsRef.current.onInterimTranscript?.(interim);
-              }
-
-              resetUtteranceTimeout();
+          if (data.type === "SpeechStarted") {
+            isSpeakingRef.current = true;
+            if (!speechStartNotifiedRef.current) {
+              speechStartNotifiedRef.current = true;
+              optionsRef.current.onSpeechStarted?.();
             }
+            return;
           }
-        } catch (e) {
-          console.error("STT parsing error:", e);
+
+          if (data.type === "UtteranceEnd") {
+            if (assembledTranscriptRef.current.trim()) {
+              finalizeCurrentUtterance();
+            } else {
+              resetUtterance();
+            }
+            return;
+          }
+
+          if (data.type !== "Results" || !data.channel?.alternatives?.[0]) {
+            return;
+          }
+
+          const transcript = data.channel.alternatives[0].transcript;
+          if (!transcript) return;
+
+          isSpeakingRef.current = true;
+          if (!speechStartNotifiedRef.current) {
+            speechStartNotifiedRef.current = true;
+            optionsRef.current.onSpeechStarted?.();
+          }
+
+          if (data.is_final) {
+            assembledTranscriptRef.current =
+              `${assembledTranscriptRef.current} ${transcript}`.trim();
+            utterancePreviewRef.current = assembledTranscriptRef.current;
+            optionsRef.current.onFinalTranscript?.(utterancePreviewRef.current);
+
+            if (data.speech_final) {
+              finalizeCurrentUtterance();
+              return;
+            }
+          } else {
+            const interim =
+              `${assembledTranscriptRef.current} ${transcript}`.trim();
+            utterancePreviewRef.current = interim;
+            optionsRef.current.onInterimTranscript?.(interim);
+          }
+
+          resetDeadmanTimeout();
+        } catch (error) {
+          console.error("[LiveSTT] Failed to parse message:", error);
         }
       };
 
       ws.onclose = () => {
+        if (
+          connectionGenerationRef.current !== generation ||
+          wsRef.current !== ws
+        ) {
+          return;
+        }
+        cleanup();
         setConnectionState("disconnected");
-        setIsRecording(false);
+      };
+      ws.onerror = () => {
+        if (
+          connectionGenerationRef.current !== generation ||
+          wsRef.current !== ws
+        ) {
+          return;
+        }
+        cleanup();
+        setConnectionState("failed");
       };
 
-      ws.onerror = () => setConnectionState("failed");
-
       const mimeType = getSupportedMimeType();
-      const recorderOptions = mimeType ? { mimeType } : {};
-      const mediaRecorder = new MediaRecorder(stream, recorderOptions);
+      const mediaRecorder = new MediaRecorder(
+        stream,
+        mimeType ? { mimeType } : undefined,
+      );
       mediaRecorderRef.current = mediaRecorder;
-
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+        if (
+          connectionGenerationRef.current === generation &&
+          wsRef.current === ws &&
+          event.data.size > 0 &&
+          ws.readyState === WebSocket.OPEN
+        ) {
           ws.send(event.data);
         }
       };
-
       mediaRecorder.start(RECORDER_TIMESLICE_MS);
-      setIsRecording(true);
 
       keepAliveRef.current = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) {
+        if (
+          connectionGenerationRef.current === generation &&
+          wsRef.current === ws &&
+          ws.readyState === WebSocket.OPEN
+        ) {
           ws.send(JSON.stringify({ type: "KeepAlive" }));
         }
-      }, 8000);
+      }, KEEP_ALIVE_INTERVAL_MS);
+
+      setConnectionState("connected");
+      setIsRecording(true);
     } catch (error) {
-      cleanup();
-      setConnectionState("failed");
+      if (connectionGenerationRef.current === generation) {
+        cleanup();
+        setConnectionState("failed");
+      }
       throw error;
     }
-  }, [connectionState, cleanup, resetUtteranceTimeout]);
+  }, [cleanup, finalizeCurrentUtterance, resetDeadmanTimeout]);
+
+  const connect = useCallback(async () => {
+    if (connectAttemptRef.current) {
+      return connectAttemptRef.current;
+    }
+    if (wsRef.current) return;
+
+    const attempt = runConnectAttempt();
+    connectAttemptRef.current = attempt;
+    try {
+      await attempt;
+    } finally {
+      if (connectAttemptRef.current === attempt) {
+        connectAttemptRef.current = null;
+      }
+    }
+  }, [runConnectAttempt]);
 
   const disconnect = useCallback(() => {
     cleanup();

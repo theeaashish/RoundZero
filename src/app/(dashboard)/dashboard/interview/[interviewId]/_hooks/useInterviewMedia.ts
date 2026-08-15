@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { useAudioPlayer } from "@/hooks/useAudioPlayer";
 import { type ConnectionState, useLiveSTT } from "@/hooks/useLiveSTT";
+import { useStreamingAudioPlayer } from "@/hooks/useStreamingAudioPlayer";
 
 export type { ConnectionState };
 
@@ -9,6 +9,14 @@ export interface InterviewMediaState {
   isPlaying: boolean;
   /** Ref-stable: safe to call from callbacks without stale closure concerns */
   playAudio: (audioUrl: string) => void;
+  prepareAudio: () => Promise<void>;
+  startStreamingTurn: (turnId: string) => void;
+  queuePcmChunk: (params: {
+    chunkIndex: number;
+    pcmBase64: string;
+    sampleRate?: number;
+    turnId: string;
+  }) => void;
   stopAudio: () => void;
   isRecording: boolean;
   toggleMic: () => Promise<void>;
@@ -23,6 +31,8 @@ export interface InterviewMediaState {
 
 export interface InterviewMediaOptions {
   isAssistantResponding?: boolean;
+  onUtteranceDispatched?: (text: string) => void;
+  onBargeIn?: () => void;
 }
 
 const joinTranscriptSegments = (...segments: string[]) =>
@@ -38,12 +48,21 @@ export const useInterviewMedia = (
   const [interimTranscript, setInterimTranscript] = useState("");
 
   const micEnabledRef = useRef(true);
-  const prevIsAssistantBusyRef = useRef(false);
   const transcriptRef = useRef("");
 
-  const { playEncodedAudio, isPlaying, stop: stopAudio } = useAudioPlayer();
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
-  // Ref-stable play function — safe to call from stale closures (e.g. onFinish)
+  const {
+    playEncodedAudio,
+    prepare: prepareAudio,
+    startStreamingTurn,
+    queuePcmChunk,
+    isPlaying,
+    stop: stopAudio,
+  } = useStreamingAudioPlayer();
+
+  // Ref-stable play function — safe to call from stale closures
   const playEncodedAudioRef = useRef(playEncodedAudio);
   useEffect(() => {
     playEncodedAudioRef.current = playEncodedAudio;
@@ -77,24 +96,18 @@ export const useInterviewMedia = (
         transcriptRef.current = nextTranscript;
         setTranscript(nextTranscript);
         setInterimTranscript("");
+        optionsRef.current?.onUtteranceDispatched?.(nextTranscript);
       }
     },
-    onSpeechStarted: () => setInterimTranscript(""),
-  });
-
-  // Auto pause/resume mic when assistant is busy (playing audio or responding)
-  useEffect(() => {
-    const isAssistantBusy = isPlaying || !!options?.isAssistantResponding;
-
-    if (isAssistantBusy && !prevIsAssistantBusyRef.current) {
-      pauseMic();
-    } else if (!isAssistantBusy && prevIsAssistantBusyRef.current) {
-      if (micEnabledRef.current) {
-        resumeMic();
+    onSpeechStarted: () => {
+      setInterimTranscript("");
+      // Barge-in: Only interrupt when assistant is actively speaking / playing audio
+      if (isPlaying) {
+        stopAudio();
+        optionsRef.current?.onBargeIn?.();
       }
-    }
-    prevIsAssistantBusyRef.current = isAssistantBusy;
-  }, [isPlaying, options?.isAssistantResponding, pauseMic, resumeMic]);
+    },
+  });
 
   // Shared connect helper to avoid duplicated logic
   const tryConnect = useCallback(
@@ -118,6 +131,10 @@ export const useInterviewMedia = (
   );
 
   const toggleMic = useCallback(async () => {
+    void prepareAudio().catch((error) => {
+      console.warn("[Interview Media] Could not resume audio:", error);
+    });
+
     if (connectionState !== "connected") {
       await tryConnect("Microphone access denied or unavailable");
       return;
@@ -134,6 +151,7 @@ export const useInterviewMedia = (
   }, [
     connectionState,
     isRecording,
+    prepareAudio,
     tryConnect,
     finalizeCurrentUtterance,
     pauseMic,
@@ -170,6 +188,9 @@ export const useInterviewMedia = (
   return {
     isPlaying,
     playAudio,
+    prepareAudio,
+    startStreamingTurn,
+    queuePcmChunk,
     stopAudio,
     isRecording,
     toggleMic,

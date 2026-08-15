@@ -1,8 +1,52 @@
+import { HeadObjectCommand } from "@aws-sdk/client-s3";
+import { STORAGE_CONFIG } from "@/config/storage";
 import db from "@/lib/prisma";
+import { S3 } from "@/lib/s3Client";
 import { getInterviewAudioKey, storageService } from "@/lib/storage";
 import { os_context } from "@/server/orpc";
 
 const SIGNED_URL_TTL_SECONDS = 300;
+
+const isNotFoundError = (error: unknown): boolean => {
+  const s3Error = error as {
+    name?: string;
+    $metadata?: { httpStatusCode?: number };
+  };
+
+  return (
+    s3Error.name === "NotFound" ||
+    s3Error.name === "NoSuchKey" ||
+    s3Error.$metadata?.httpStatusCode === 404
+  );
+};
+
+async function resolveAudioKey(
+  interviewId: string,
+  messageId: string,
+): Promise<string | null> {
+  const candidateKeys = [
+    getInterviewAudioKey(interviewId, messageId, "wav"),
+    getInterviewAudioKey(interviewId, messageId, "mp3"),
+  ];
+
+  for (const key of candidateKeys) {
+    try {
+      await S3.send(
+        new HeadObjectCommand({
+          Bucket: STORAGE_CONFIG.bucketName,
+          Key: key,
+        }),
+      );
+      return key;
+    } catch (error) {
+      if (!isNotFoundError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  return null;
+}
 
 export async function GET(
   request: Request,
@@ -29,9 +73,13 @@ export async function GET(
   }
 
   try {
-    const key = getInterviewAudioKey(message.interviewId, messageId);
+    const audioKey = await resolveAudioKey(message.interviewId, messageId);
+    if (!audioKey) {
+      return new Response("Audio not found", { status: 404 });
+    }
+
     const signedUrl = await storageService.getPresignedDownloadUrl(
-      key,
+      audioKey,
       SIGNED_URL_TTL_SECONDS,
     );
 

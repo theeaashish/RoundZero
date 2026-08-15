@@ -59,7 +59,14 @@ export function ChatMessage({ message }: ChatMessageProps) {
               : "bg-primary text-primary-foreground rounded-tr-sm",
           )}
         >
-          {message.isTyping ? (
+          {message.content ? (
+            <p className="leading-relaxed whitespace-pre-wrap">
+              {message.content}
+              {message.isTyping && (
+                <span className="inline-block w-1.5 h-3.5 bg-current ml-1 animate-pulse align-middle opacity-70" />
+              )}
+            </p>
+          ) : message.isTyping ? (
             <div className="flex items-center gap-1.5 py-1 px-1">
               <span
                 className="w-1.5 h-1.5 bg-current rounded-full animate-bounce"
@@ -74,11 +81,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
                 style={{ animationDelay: "300ms" }}
               />
             </div>
-          ) : (
-            <p className="leading-relaxed whitespace-pre-wrap">
-              {message.content}
-            </p>
-          )}
+          ) : null}
         </div>
         {message.codeSnippet ? (
           <CodeSnippet

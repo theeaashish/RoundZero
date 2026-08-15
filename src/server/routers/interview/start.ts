@@ -91,7 +91,10 @@ export async function startSession({
     if (currentInterview.status === INTERVIEW_STATUS.SETUP) {
       await tx.interview.update({
         where: { id: interview.id, userId: user.id },
-        data: { status: INTERVIEW_STATUS.IN_PROGRESS },
+        data: {
+          status: INTERVIEW_STATUS.IN_PROGRESS,
+          activeTurnId: null,
+        },
       });
     }
 

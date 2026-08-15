@@ -117,6 +117,7 @@ model Interview {
   startedAt       DateTime               @default(now())
   endedAt         DateTime?
   durationSec     Int                    @default(0)
+  activeTurnId    String?
   resume          Resume?                @relation(fields: [resumeId], references: [id])
   user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages        Message[]
@@ -137,9 +138,11 @@ model Message {
   audioUrl    String?
   codeSnippet String?
   language    String?
+  turnId      String?
   createdAt   DateTime    @default(now())
   interview   Interview   @relation(fields: [interviewId], references: [id], onDelete: Cascade)
 
+  @@unique([interviewId, turnId, role])
   @@index([interviewId])
   @@map("message")
 }
@@ -161,22 +164,22 @@ model Report {
 }
 
 model SystemDesignProblem {
-  id                String                @id @default(uuid())
-  title             String
-  description       String
-  functionalReqs    String[]
-  nonFunctionalReqs String[]
-  complexity        String                @default("MEDIUM")
-  domain            String                @default("DATA")
-  interviewRole     String                @default("SENIOR")
-  estimatedDurationMinutes Int            @default(45)
-  tags              String[]              @default([])
-  specJson          Json
-  evaluationJson    Json?
-  createdBy         String?
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
-  attempts          SystemDesignAttempt[]
+  id                       String                @id @default(uuid())
+  title                    String
+  description              String
+  functionalReqs           String[]
+  nonFunctionalReqs        String[]
+  complexity               String                @default("MEDIUM")
+  domain                   String                @default("DATA")
+  interviewRole            String                @default("SENIOR")
+  estimatedDurationMinutes Int                   @default(45)
+  tags                     String[]              @default([])
+  specJson                 Json
+  evaluationJson           Json?
+  createdBy                String?
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+  attempts                 SystemDesignAttempt[]
 
   @@map("system_design_problem")
 }
@@ -245,11 +248,11 @@ model Subscription {
   stripeScheduleId     String?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
-  
-  user                 User      @relation(fields: [referenceId], references: [id], onDelete: Cascade)
 
+  user User @relation(fields: [referenceId], references: [id], onDelete: Cascade)
+
+  @@unique([stripeSubscriptionId])
   @@index([referenceId])
   @@index([referenceId, status])
-  @@unique([stripeSubscriptionId])
   @@map("subscription")
 }

@@ -113,7 +113,7 @@ export function InterviewSession() {
               minute: "2-digit",
             })
           : "",
-        isTyping: false,
+        isTyping: message.isTyping ?? false,
       })),
     [messages],
   );

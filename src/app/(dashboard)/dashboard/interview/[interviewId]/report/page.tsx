@@ -1,11 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ChevronLeft, FileText, Share2 } from "lucide-react";
+import { ChevronLeft, FileText, Loader2, Share2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useRef } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,6 +34,7 @@ const ReportRadarChart = dynamic(
 export default function InterviewReportPage() {
   const params = useParams<{ interviewId: string }>();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const transcriptRef = useRef<HTMLDivElement>(null);
 
   // Fetch real interview data from the backend
@@ -42,6 +44,23 @@ export default function InterviewReportPage() {
       input: { id: params.interviewId },
     }),
   );
+
+  const { mutateAsync: retryEndSession, isPending: isRetryingReport } =
+    useMutation(orpc.interview.end.mutationOptions());
+
+  const handleRetryReport = useCallback(async () => {
+    if (!data?.interview) return;
+    try {
+      await retryEndSession({
+        interviewId: params.interviewId,
+        durationSec: data.interview.durationSec,
+      });
+      await queryClient.invalidateQueries();
+      toast.success("Report generated successfully");
+    } catch {
+      toast.error("Report generation failed. Please try again.");
+    }
+  }, [data, params.interviewId, retryEndSession, queryClient]);
 
   const handleTimelineNodeClick = useCallback((messageId: string) => {
     // Find the Q&A pair element and scroll to it
@@ -141,10 +160,18 @@ export default function InterviewReportPage() {
                 Go Back
               </Button>
               <Button
-                onClick={() => window.location.reload()}
+                onClick={handleRetryReport}
+                disabled={isRetryingReport}
                 className="flex-1"
               >
-                Refresh Status
+                {isRetryingReport ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  "Generate Report"
+                )}
               </Button>
             </div>
           </CardContent>
