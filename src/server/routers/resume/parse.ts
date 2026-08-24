@@ -1,7 +1,7 @@
 import { ORPCError } from "@orpc/client";
 import { z } from "zod";
 
-import { extractResumeText } from "@/lib/extractResumeText";
+import { extractResumeText } from "@/lib/extract-resume-text";
 import { storageService } from "@/lib/storage";
 import type { Context } from "@/server/orpc";
 import { s3ResumeSchema } from "../interview/schemas";

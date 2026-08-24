@@ -614,22 +614,41 @@ export const synthesizePcmChunk = async (
   });
 };
 
-export const persistWavArchiveAsync = async (
-  pcmChunks: Buffer[],
+// MP3 is ~3x smaller than linear16 on the wire (128kbps vs 384kbps at 24kHz)
+// and decodes natively via AudioContext.decodeAudioData on every browser.
+export const synthesizeMp3Chunk = async (
+  text: string,
+  options?: {
+    voice?: TTSVoice;
+    signal?: AbortSignal;
+  },
+): Promise<Buffer> => {
+  const cleanedText = cleanTextForTTS(text);
+  if (!cleanedText || options?.signal?.aborted) return Buffer.alloc(0);
+
+  return textToSpeech(` ${cleanedText}`, {
+    voice: options?.voice ?? DEFAULT_INTERVIEW_VOICE,
+    encoding: "mp3",
+    container: undefined,
+    signal: options?.signal,
+  });
+};
+
+// Concatenated standalone MP3 files play back fine as a single stream, so the
+// archive is just the streamed chunks joined — ~10x smaller than the old WAV.
+export const persistMp3ArchiveAsync = async (
+  mp3Chunks: Buffer[],
   interviewId: string,
   messageId: string,
 ): Promise<string | undefined> => {
   try {
-    const rawPcm = Buffer.concat(pcmChunks);
-    if (rawPcm.length === 0) return undefined;
-
-    const wavBuffer = createWavBuffer(rawPcm, 24000, 1, 16);
+    if (mp3Chunks.length === 0) return undefined;
 
     await storageService.uploadInterviewAudio(
-      wavBuffer,
+      Buffer.concat(mp3Chunks),
       interviewId,
       messageId,
-      CONTENT_TYPES.WAV,
+      CONTENT_TYPES.MP3,
     );
 
     const audioUrl = getInterviewAudioUrl(messageId);
@@ -640,7 +659,7 @@ export const persistWavArchiveAsync = async (
 
     return audioUrl;
   } catch (error) {
-    console.error("[WAV Archive Error]", { error, interviewId, messageId });
+    console.error("[MP3 Archive Error]", { error, interviewId, messageId });
     return undefined;
   }
 };

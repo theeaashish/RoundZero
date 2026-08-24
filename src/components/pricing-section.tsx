@@ -180,7 +180,7 @@ export function PricingSection({
           throw new Error(error.message || "Failed to start checkout");
         }
       } else if (data?.url) {
-        window.location.href = data.url;
+        window.location.assign(data.url);
       } else {
         setCheckoutIssue({
           title: "Unable to start checkout",

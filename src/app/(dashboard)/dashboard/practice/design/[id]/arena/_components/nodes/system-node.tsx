@@ -1,5 +1,5 @@
 import { Handle, type Node, type NodeProps, Position } from "@xyflow/react";
-import { memo } from "react";
+import { createElement, memo } from "react";
 import type { ArchitectureNodeData } from "@/lib/architecture-types";
 import { DESIGN_NODES, NODE_CATEGORIES } from "@/lib/design-nodes";
 import { cn } from "@/lib/utils";
@@ -185,7 +185,7 @@ function SystemNodeComponent({ id, data, selected }: NodeProps<CustomNode>) {
           selected && "scale-105",
         )}
       >
-        {Icon ? <Icon className="h-5 w-5" /> : null}
+        {Icon ? createElement(Icon, { className: "h-5 w-5" }) : null}
         {/* Pulsing selection dot */}
         {selected ? (
           <span className="absolute -right-1 -top-1 flex h-2.5 w-2.5">

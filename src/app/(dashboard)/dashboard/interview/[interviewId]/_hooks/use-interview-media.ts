@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { type ConnectionState, useLiveSTT } from "@/hooks/useLiveSTT";
-import { useStreamingAudioPlayer } from "@/hooks/useStreamingAudioPlayer";
+import { type ConnectionState, useLiveSTT } from "@/hooks/use-live-stt";
+import { useStreamingAudioPlayer } from "@/hooks/use-streaming-audio-player";
+import {
+  countWords,
+  describeSttError,
+  joinTranscriptSegments,
+} from "@/lib/interview-media-utils";
 
 export type { ConnectionState };
 
@@ -11,10 +16,9 @@ export interface InterviewMediaState {
   playAudio: (audioUrl: string) => void;
   prepareAudio: () => Promise<void>;
   startStreamingTurn: (turnId: string) => void;
-  queuePcmChunk: (params: {
+  queueAudioChunk: (params: {
     chunkIndex: number;
-    pcmBase64: string;
-    sampleRate?: number;
+    audioBase64: string;
     turnId: string;
   }) => void;
   markAudioComplete: (turnId: string) => void;
@@ -34,13 +38,14 @@ export interface InterviewMediaOptions {
   isAssistantResponding?: boolean;
   onUtteranceDispatched?: (text: string) => void;
   onBargeIn?: () => void;
+  /** Domain terms boosted for STT accuracy (e.g. tech stack keywords) */
+  sttKeyterms?: string[];
 }
 
-const joinTranscriptSegments = (...segments: string[]) =>
-  segments
-    .map((segment) => segment.trim())
-    .filter(Boolean)
-    .join(" ");
+// Finals are trustworthy at 3 words; interims stream continuously mid-speech,
+// so they need a slightly higher threshold to stay immune to backchannel noise.
+const FINAL_BARGE_IN_WORDS = 3;
+const INTERIM_BARGE_IN_WORDS = 4;
 
 export const useInterviewMedia = (
   options?: InterviewMediaOptions,
@@ -52,13 +57,15 @@ export const useInterviewMedia = (
   const transcriptRef = useRef("");
 
   const optionsRef = useRef(options);
-  optionsRef.current = options;
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   const {
     playEncodedAudio,
     prepare: prepareAudio,
     startStreamingTurn,
-    queuePcmChunk,
+    queueAudioChunk,
     markAudioComplete,
     isPlaying,
     stop: stopAudio,
@@ -74,6 +81,19 @@ export const useInterviewMedia = (
     playEncodedAudioRef.current(audioUrl);
   }, []);
 
+  // Shared barge-in check. Runs on interims (which arrive every ~100-200ms
+  // while the user is talking) instead of only on finals — cuts interruption
+  // latency by ~0.5-1s since is_final waits for a speech segment to end.
+  const maybeBargeIn = useCallback(
+    (text: string, minWords: number) => {
+      if (!isPlaying || countWords(text) < minWords) return;
+
+      stopAudio();
+      optionsRef.current?.onBargeIn?.();
+    },
+    [isPlaying, stopAudio],
+  );
+
   const {
     connectionState,
     isRecording,
@@ -83,16 +103,14 @@ export const useInterviewMedia = (
     pauseMic,
     resumeMic,
   } = useLiveSTT({
-    onInterimTranscript: (text) =>
-      setInterimTranscript(joinTranscriptSegments(transcriptRef.current, text)),
+    keyterms: options?.sttKeyterms,
+    onInterimTranscript: (text) => {
+      setInterimTranscript(joinTranscriptSegments(transcriptRef.current, text));
+      maybeBargeIn(text, INTERIM_BARGE_IN_WORDS);
+    },
     onFinalTranscript: (text) => {
       setInterimTranscript(joinTranscriptSegments(transcriptRef.current, text));
-      // Intentional barge-in: Only interrupt when candidate speaks a meaningful phrase (3+ words)
-      const words = text.trim().split(/\s+/).filter(Boolean);
-      if (isPlaying && words.length >= 3) {
-        stopAudio();
-        optionsRef.current?.onBargeIn?.();
-      }
+      maybeBargeIn(text, FINAL_BARGE_IN_WORDS);
     },
     onUtteranceEnd: (assembledTranscript) => {
       const trimmed = assembledTranscript.trim();
@@ -117,23 +135,20 @@ export const useInterviewMedia = (
   });
 
   // Shared connect helper to avoid duplicated logic
-  const tryConnect = useCallback(
-    async (errorMessage: string): Promise<boolean> => {
-      try {
-        await connect();
-        micEnabledRef.current = true;
-        return true;
-      } catch {
-        toast.error(errorMessage);
-        return false;
-      }
-    },
-    [connect],
-  );
+  const tryConnect = useCallback(async (): Promise<boolean> => {
+    try {
+      await connect();
+      micEnabledRef.current = true;
+      return true;
+    } catch (error) {
+      console.error("[Interview Media] STT connection failed:", error);
+      toast.error(describeSttError(error));
+      return false;
+    }
+  }, [connect]);
 
   const connectSTT = useCallback(
-    () =>
-      tryConnect("Failed to connect real-time transcription").then(() => {}),
+    () => tryConnect().then(() => {}),
     [tryConnect],
   );
 
@@ -143,7 +158,7 @@ export const useInterviewMedia = (
     });
 
     if (connectionState !== "connected") {
-      await tryConnect("Microphone access denied or unavailable");
+      await tryConnect();
       return;
     }
 
@@ -197,7 +212,7 @@ export const useInterviewMedia = (
     playAudio,
     prepareAudio,
     startStreamingTurn,
-    queuePcmChunk,
+    queueAudioChunk,
     markAudioComplete,
     stopAudio,
     isRecording,

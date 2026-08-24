@@ -163,7 +163,10 @@ function ArenaInner({ problemId }: { problemId: string }) {
       setEvaluationResult(parsedFeedback.data);
     }
 
-    setTimeout(() => fitView({ padding: 0.2 }), 50);
+    const timer = setTimeout(() => fitView({ padding: 0.2 }), 50);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [attempt, fitView, setEdges, setNodes]);
 
   const selectedNode = useMemo(

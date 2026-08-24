@@ -2,7 +2,7 @@
 
 import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 import { format } from "date-fns";
-import type { AnalyticsData } from "../_hooks/useAnalytics";
+import type { AnalyticsData } from "../_hooks/use-analytics";
 
 const styles = StyleSheet.create({
   page: {

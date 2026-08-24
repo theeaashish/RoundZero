@@ -239,7 +239,7 @@ Required JSON Structure:
 
 
   3. Reduce the Speech-to-Text Silence Timeout
-  In src/hooks/useLiveSTT.ts, the default utteranceTimeoutMs is set to 1500ms (1.5 seconds). This means when the user
+  In src/hooks/use-live-stt.ts, the default utteranceTimeoutMs is set to 1500ms (1.5 seconds). This means when the user
   finishes speaking, the app waits an entire 1.5 seconds of silence before even starting the request to the server.
    * Fix: Reduce this timeout to 800ms or 1000ms. It will make the interviewer feel much more snappy and responsive to
      the candidate.

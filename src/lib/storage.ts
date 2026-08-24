@@ -1,7 +1,7 @@
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { STORAGE_CONFIG } from "@/config/storage";
-import { S3 } from "./s3Client";
+import { S3 } from "./s3-client";
 
 // Storage path prefixes
 export const STORAGE_PATHS = {

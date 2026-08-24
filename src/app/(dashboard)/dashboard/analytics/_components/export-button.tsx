@@ -2,11 +2,13 @@
 
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import { Download, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { UpgradePlanDialog } from "@/components/upgrade-plan-dialog";
-import type { AnalyticsData, Period } from "../_hooks/useAnalytics";
+import type { AnalyticsData, Period } from "../_hooks/use-analytics";
 import { AnalyticsReportPDF } from "./analytics-pdf-report";
+
+const emptySubscribe = () => () => {};
 
 interface ExportButtonProps {
   data?: AnalyticsData;
@@ -36,7 +38,11 @@ export function ExportButton({
   period,
   canExport,
 }: ExportButtonProps) {
-  const isClient = typeof window !== "undefined";
+  const isClient = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false,
+  );
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
 
   if (!isClient || isLoading) {

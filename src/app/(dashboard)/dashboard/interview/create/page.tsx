@@ -19,7 +19,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
-import { ResumeUploader } from "@/components/file-uploader/Uploader";
+import { ResumeUploader } from "@/components/file-uploader/uploader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,10 +47,10 @@ import {
   type CreateInterviewSchemaType,
   createInterviewSchema,
   FIELD_LIMITS,
-} from "@/lib/zodSchemas/createInterview";
-import { FormStepper } from "./_components/FormStepper";
-import { ResumeSelectionDialog } from "./_components/ResumeSelectionDialog";
-import { StepCompanyContext } from "./_components/StepCompanyContext";
+} from "@/lib/zod-schemas/create-interview";
+import { FormStepper } from "./_components/form-stepper";
+import { ResumeSelectionDialog } from "./_components/resume-selection-dialog";
+import { StepCompanyContext } from "./_components/step-company-context";
 
 type CreateInterviewFormValues = typeof createInterviewSchema._input;
 

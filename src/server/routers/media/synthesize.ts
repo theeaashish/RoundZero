@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { STORAGE_CONFIG } from "@/config/storage";
 import { textToSpeech } from "@/lib/deepgram";
-import { S3 } from "@/lib/s3Client";
+import { S3 } from "@/lib/s3-client";
 import type { Context } from "@/server/orpc";
 
 export const synthesizeInput = z.object({

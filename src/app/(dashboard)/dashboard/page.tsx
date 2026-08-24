@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import DashboardContent from "./_components/DashboardContent";
+import DashboardContent from "./_components/dashboard-content";
 
 export const metadata = {
   title: "Dashboard | RoundZero",

@@ -9,7 +9,8 @@ import {
 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { formatBytes, useFileUpload } from "@/hooks/use-file-upload";
+import { useFileUpload } from "@/hooks/use-file-upload";
+import { formatBytes } from "@/lib/format-bytes";
 import { orpcClient } from "@/lib/orpc-client";
 import { Button } from "../ui/button";
 

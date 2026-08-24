@@ -10,18 +10,19 @@ import {
   deleteUserInterviewMessage,
   listInterviewMessages,
   mergeInterviewHistory,
-  persistWavArchiveAsync,
+  persistMp3ArchiveAsync,
   SentenceChunker,
   streamInterviewReply,
   streamOpeningInterviewReply,
-  synthesizePcmChunk,
+  synthesizeMp3Chunk,
 } from "@/server/routers/interview/service";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const MAX_MESSAGE_LENGTH = 10_000;
 const MAX_CODE_LENGTH = 50_000;
+const MAX_TTS_CONCURRENCY = 4;
 
 const interviewChatStreamInput = z
   .object({
@@ -46,7 +47,9 @@ const interviewChatStreamInput = z
     turnId: z.string().uuid("Invalid turn ID"),
   })
   .refine(
-    (data) => Boolean(data.isOpening) || (Boolean(data.message) && (data.message?.length ?? 0) > 0),
+    (data) =>
+      Boolean(data.isOpening) ||
+      (Boolean(data.message) && (data.message?.length ?? 0) > 0),
     {
       message: "Message is required when not opening interview",
       path: ["message"],
@@ -101,6 +104,7 @@ export async function POST(request: Request) {
   if (!context.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = context.user.id;
 
   const body = await request.json().catch(() => null);
   const parsedInput = interviewChatStreamInput.safeParse(body);
@@ -164,7 +168,10 @@ export async function POST(request: Request) {
 
     if (activeInterview.count === 0) {
       return Response.json(
-        { error: "A response is already in progress. Please wait for it to finish." },
+        {
+          error:
+            "A response is already in progress. Please wait for it to finish.",
+        },
         { status: 409 },
       );
     }
@@ -240,13 +247,34 @@ export async function POST(request: Request) {
           : streamInterviewReply(interview, mergedHistory);
         const chunker = new SentenceChunker();
         const completedChunks = new Map<number, SynthesizedChunk>();
-        const allPcmBuffers: Buffer[] = [];
+        const allAudioChunks: Buffer[] = [];
         const ttsTasks: Promise<void>[] = [];
 
         let fullAssistantReply = "";
         let sourceChunkIndex = 0;
         let nextSourceIndex = 0;
         let nextPlaybackIndex = 0;
+
+        // Bounded TTS pool: parallel enough for low latency, capped so long
+        // replies don't burst Deepgram with dozens of simultaneous requests.
+        let inFlightTts = 0;
+        const ttsWaiters: (() => void)[] = [];
+        const acquireTtsSlot = () =>
+          new Promise<void>((resolve) => {
+            if (inFlightTts < MAX_TTS_CONCURRENCY) {
+              inFlightTts += 1;
+              resolve();
+              return;
+            }
+            ttsWaiters.push(() => {
+              inFlightTts += 1;
+              resolve();
+            });
+          });
+        const releaseTtsSlot = () => {
+          inFlightTts -= 1;
+          ttsWaiters.shift()?.();
+        };
 
         const emitReadyChunks = () => {
           while (completedChunks.has(nextSourceIndex) && !signal.aborted) {
@@ -256,12 +284,11 @@ export async function POST(request: Request) {
 
             if (!chunk || chunk.pcmBuffer.length === 0) continue;
 
-            allPcmBuffers.push(chunk.pcmBuffer);
+            allAudioChunks.push(chunk.pcmBuffer);
             sendEvent("audio-chunk", {
               turnId: input.turnId,
               chunkIndex: nextPlaybackIndex,
-              pcmBase64: chunk.pcmBuffer.toString("base64"),
-              sampleRate: 24000,
+              audioBase64: chunk.pcmBuffer.toString("base64"),
               text: chunk.text,
             });
             nextPlaybackIndex += 1;
@@ -274,8 +301,10 @@ export async function POST(request: Request) {
           const currentSourceIndex = sourceChunkIndex;
           sourceChunkIndex += 1;
 
-          const task: Promise<void> = synthesizePcmChunk(chunkText, { signal })
+          const task = acquireTtsSlot()
+            .then(() => synthesizeMp3Chunk(chunkText, { signal }))
             .then((pcmBuffer) => {
+              releaseTtsSlot();
               if (signal.aborted) return;
               completedChunks.set(currentSourceIndex, {
                 sourceIndex: currentSourceIndex,
@@ -285,6 +314,7 @@ export async function POST(request: Request) {
               emitReadyChunks();
             })
             .catch((error) => {
+              releaseTtsSlot();
               if (signal.aborted) return;
               console.error("[TTS Synthesis Error]", {
                 chunkIndex: currentSourceIndex,
@@ -360,10 +390,10 @@ export async function POST(request: Request) {
           content: assistantMessage.content,
         });
 
-        if (allPcmBuffers.length > 0) {
+        if (allAudioChunks.length > 0) {
           const archiveAudio = () =>
-            persistWavArchiveAsync(
-              allPcmBuffers,
+            persistMp3ArchiveAsync(
+              allAudioChunks,
               interview.id,
               assistantMessage.id,
             );
@@ -375,6 +405,15 @@ export async function POST(request: Request) {
           }
         }
       } catch (error) {
+        // Always release the activeTurnId lock — otherwise a Gemini/stream
+        // failure permanently bricks the interview with 409 "response in
+        // progress" because createAssistantInterviewMessageIfActive never ran.
+        await cancelInterviewTurn({
+          interviewId: interview.id,
+          userId,
+          turnId: input.turnId,
+        }).catch(() => {});
+
         if (!signal.aborted) {
           console.error("[Interview Chat SSE Stream Error]", error);
           sendEvent("error", {

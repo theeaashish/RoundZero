@@ -1,4 +1,4 @@
-import { useStreamingAudioPlayer } from "./useStreamingAudioPlayer";
+import { useStreamingAudioPlayer } from "./use-streaming-audio-player";
 
 export interface AudioPlayerState {
   isPlaying: boolean;

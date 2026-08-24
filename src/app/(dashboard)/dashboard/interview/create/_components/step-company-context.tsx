@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   type createInterviewSchema,
   FIELD_LIMITS,
-} from "@/lib/zodSchemas/createInterview";
+} from "@/lib/zod-schemas/create-interview";
 
 // RHF uses the Zod *input* type (pre-transform/defaults), not the output type.
 type CreateInterviewInput = z.input<typeof createInterviewSchema>;
@@ -119,7 +119,7 @@ export function StepCompanyContext({ form }: StepCompanyContextProps) {
               <FormControl>
                 <Textarea
                   placeholder={`Paste the full job description here...\n\nExample:\nWe are looking for a Senior Software Engineer to join our Platform team. You will be responsible for...`}
-                  className="min-h-[200px] max-h-[400px] overflow-y-auto resize-y"
+                  className="min-h-50 max-h-100 overflow-y-auto resize-y"
                   maxLength={FIELD_LIMITS.jobDescription.max}
                   {...field}
                 />

@@ -1,7 +1,7 @@
 import { ORPCError } from "@orpc/client";
 import { z } from "zod";
 
-import { extractResumeText } from "@/lib/extractResumeText";
+import { extractResumeText } from "@/lib/extract-resume-text";
 import {
   ALLOWED_RESUME_EXTENSIONS,
   FILE_LIMITS,

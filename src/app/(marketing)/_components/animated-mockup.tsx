@@ -68,6 +68,51 @@ function highlightKeywords(text: string) {
   });
 }
 
+const AI_WAVEFORM_BARS = [
+  { height: 18, duration: 0.75 },
+  { height: 26, duration: 0.85 },
+  { height: 14, duration: 0.65 },
+  { height: 30, duration: 0.95 },
+  { height: 22, duration: 0.7 },
+  { height: 28, duration: 0.9 },
+  { height: 16, duration: 0.8 },
+  { height: 32, duration: 1.0 },
+  { height: 20, duration: 0.75 },
+  { height: 28, duration: 0.85 },
+  { height: 15, duration: 0.65 },
+  { height: 24, duration: 0.9 },
+  { height: 18, duration: 0.7 },
+  { height: 26, duration: 0.8 },
+  { height: 12, duration: 0.6 },
+];
+
+const USER_WAVEFORM_BARS = [
+  { height: 12, duration: 0.55 },
+  { height: 24, duration: 0.7 },
+  { height: 16, duration: 0.45 },
+  { height: 28, duration: 0.8 },
+  { height: 20, duration: 0.6 },
+  { height: 30, duration: 0.75 },
+  { height: 14, duration: 0.5 },
+  { height: 26, duration: 0.65 },
+  { height: 32, duration: 0.8 },
+  { height: 18, duration: 0.55 },
+  { height: 22, duration: 0.7 },
+  { height: 28, duration: 0.75 },
+  { height: 15, duration: 0.5 },
+  { height: 30, duration: 0.8 },
+  { height: 24, duration: 0.65 },
+  { height: 16, duration: 0.45 },
+  { height: 28, duration: 0.7 },
+  { height: 20, duration: 0.6 },
+  { height: 26, duration: 0.75 },
+  { height: 14, duration: 0.5 },
+  { height: 22, duration: 0.65 },
+  { height: 18, duration: 0.55 },
+  { height: 24, duration: 0.7 },
+  { height: 10, duration: 0.45 },
+];
+
 export function AnimatedMockup() {
   const [stage, setStage] = useState<Stage>("setup");
   const [roleText, setRoleText] = useState("");
@@ -275,16 +320,16 @@ export function AnimatedMockup() {
 
                 {/* Animated Voice Waveform */}
                 <div className="flex items-center gap-1.5 h-6">
-                  {Array.from({ length: 15 }).map((_, i) => (
+                  {AI_WAVEFORM_BARS.map((bar, i) => (
                     <motion.div
                       key={i}
                       className="w-1 bg-primary rounded-full"
                       animate={{
-                        height: [8, Math.random() * 24 + 8, 8],
+                        height: [8, bar.height, 8],
                       }}
                       transition={{
                         repeat: Infinity,
-                        duration: 0.6 + Math.random() * 0.4,
+                        duration: bar.duration,
                         ease: "easeInOut",
                       }}
                     />
@@ -320,16 +365,16 @@ export function AnimatedMockup() {
 
                 {/* Simulated Waveform responding to speak */}
                 <div className="flex items-center gap-1 h-6">
-                  {Array.from({ length: 24 }).map((_, i) => (
+                  {USER_WAVEFORM_BARS.map((bar, i) => (
                     <motion.div
                       key={i}
                       className="w-1 bg-emerald-500 rounded-full"
                       animate={{
-                        height: [4, Math.random() * 28 + 4, 4],
+                        height: [4, bar.height, 4],
                       }}
                       transition={{
                         repeat: Infinity,
-                        duration: 0.4 + Math.random() * 0.4,
+                        duration: bar.duration,
                         ease: "easeInOut",
                       }}
                     />

@@ -2,9 +2,12 @@
 
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import { Download, Loader2 } from "lucide-react";
+import { useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import type { CategoryScores } from "@/server/routers/interview/schemas";
 import { InterviewReportPDF } from "./pdf-report";
+
+const emptySubscribe = () => () => {};
 
 interface PDFDownloadButtonProps {
   interview: {
@@ -25,7 +28,11 @@ export function PDFDownloadButton({
   interview,
   report,
 }: PDFDownloadButtonProps) {
-  const isClient = typeof window !== "undefined";
+  const isClient = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false,
+  );
 
   if (!isClient) {
     return (

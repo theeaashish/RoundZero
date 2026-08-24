@@ -15,7 +15,7 @@ import { ExportButton } from "./_components/export-button";
 import { OverviewStats } from "./_components/overview-stats";
 import { RecentScores } from "./_components/recent-scores";
 import { StrengthsWeaknesses } from "./_components/strengths-weaknesses";
-import { type Period, useAnalytics } from "./_hooks/useAnalytics";
+import { type Period, useAnalytics } from "./_hooks/use-analytics";
 
 const ScoreTrendChart = dynamic(
   () =>

@@ -2,7 +2,7 @@ import type { Route } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import LoginForm from "../_components/LoginForm";
+import LoginForm from "../_components/login-form";
 
 export const metadata = {
   title: "Sign In | Interview AI",

@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { formatBytes } from "@/lib/format-bytes";
 
 export type FileMetadata = {
   name: string;
@@ -138,32 +139,29 @@ export const useFileUpload = (
   }, []);
 
   const clearFiles = useCallback(() => {
-    setState((prev) => {
-      // Clean up object URLs
-      for (const file of prev.files ?? []) {
-        if (
-          file.preview &&
-          file.file instanceof File &&
-          file.file.type.startsWith("image/")
-        ) {
-          URL.revokeObjectURL(file.preview);
-        }
+    // Clean up object URLs
+    for (const file of state.files ?? []) {
+      if (
+        file.preview &&
+        file.file instanceof File &&
+        file.file.type.startsWith("image/")
+      ) {
+        URL.revokeObjectURL(file.preview);
       }
+    }
 
-      if (inputRef.current) {
-        inputRef.current.value = "";
-      }
+    if (inputRef.current) {
+      inputRef.current.value = "";
+    }
 
-      const newState = {
-        ...prev,
-        errors: [],
-        files: [],
-      };
+    setState((prev) => ({
+      ...prev,
+      errors: [],
+      files: [],
+    }));
 
-      onFilesChange?.(newState.files);
-      return newState;
-    });
-  }, [onFilesChange]);
+    onFilesChange?.([]);
+  }, [state.files, onFilesChange]);
 
   const addFiles = useCallback(
     (newFiles: FileList | File[]) => {
@@ -234,17 +232,17 @@ export const useFileUpload = (
         // Call the onFilesAdded callback with the newly added valid files
         onFilesAdded?.(validFiles);
 
-        setState((prev) => {
-          const newFiles = !multiple
-            ? validFiles
-            : [...prev.files, ...validFiles];
-          onFilesChange?.(newFiles);
-          return {
-            ...prev,
-            errors,
-            files: newFiles,
-          };
-        });
+        const newFiles = !multiple
+          ? validFiles
+          : [...state.files, ...validFiles];
+
+        onFilesChange?.(newFiles);
+
+        setState((prev) => ({
+          ...prev,
+          errors,
+          files: newFiles,
+        }));
       } else if (errors.length > 0) {
         setState((prev) => ({
           ...prev,
@@ -273,27 +271,25 @@ export const useFileUpload = (
 
   const removeFile = useCallback(
     (id: string) => {
-      setState((prev) => {
-        const fileToRemove = prev.files.find((file) => file.id === id);
-        if (
-          fileToRemove?.preview &&
-          fileToRemove.file instanceof File &&
-          fileToRemove.file.type.startsWith("image/")
-        ) {
-          URL.revokeObjectURL(fileToRemove.preview);
-        }
+      const fileToRemove = state.files.find((file) => file.id === id);
+      if (
+        fileToRemove?.preview &&
+        fileToRemove.file instanceof File &&
+        fileToRemove.file.type.startsWith("image/")
+      ) {
+        URL.revokeObjectURL(fileToRemove.preview);
+      }
 
-        const newFiles = prev.files.filter((file) => file.id !== id);
-        onFilesChange?.(newFiles);
+      const newFiles = state.files.filter((file) => file.id !== id);
+      onFilesChange?.(newFiles);
 
-        return {
-          ...prev,
-          errors: [],
-          files: newFiles,
-        };
-      });
+      setState((prev) => ({
+        ...prev,
+        errors: [],
+        files: newFiles,
+      }));
     },
-    [onFilesChange],
+    [state.files, onFilesChange],
   );
 
   const clearErrors = useCallback(() => {
@@ -396,15 +392,4 @@ export const useFileUpload = (
   ];
 };
 
-// Helper function to format bytes to human-readable format
-export const formatBytes = (bytes: number, decimals = 2): string => {
-  if (bytes === 0) return "0 Bytes";
-
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
-
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-  return Number.parseFloat((bytes / k ** i).toFixed(dm)) + sizes[i];
-};
+export { formatBytes };

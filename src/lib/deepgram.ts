@@ -1,4 +1,4 @@
-import { createClient, type LiveSchema } from "@deepgram/sdk";
+import { createClient } from "@deepgram/sdk";
 import { env } from "@/config/env";
 
 // Deepgram SDK client instance (singleton)
@@ -27,26 +27,6 @@ export const DEFAULT_INTERVIEW_VOICE = TTS_VOICES.ORPHEUS;
 
 export type TTSVoice = (typeof TTS_VOICES)[keyof typeof TTS_VOICES];
 
-// STT configuration options
-export interface STTOptions {
-  model?: "nova-2" | "nova-2-general" | "nova-2-meeting" | "nova-2-phonecall";
-  language?: string;
-  smartFormat?: boolean;
-  interimResults?: boolean;
-  utteranceEndMs?: number;
-  vadEvents?: boolean;
-}
-
-// Default STT configuration
-const DEFAULT_STT_OPTIONS: Required<STTOptions> = {
-  model: "nova-2",
-  language: "en-US",
-  smartFormat: true,
-  interimResults: true,
-  utteranceEndMs: 1000,
-  vadEvents: true,
-};
-
 // TTS configuration
 export type TTSEncoding =
   | "linear16"
@@ -73,22 +53,6 @@ const DEFAULT_TTS_OPTIONS = {
   encoding: "linear16",
   container: "wav",
 } as const;
-
-// Create a real-time STT WebSocket connection
-export const createSTTWebSocket = (options: STTOptions = {}) => {
-  const config: LiveSchema = {
-    model: options.model ?? DEFAULT_STT_OPTIONS.model,
-    language: options.language ?? DEFAULT_STT_OPTIONS.language,
-    smart_format: options.smartFormat ?? DEFAULT_STT_OPTIONS.smartFormat,
-    interim_results:
-      options.interimResults ?? DEFAULT_STT_OPTIONS.interimResults,
-    utterance_end_ms:
-      options.utteranceEndMs ?? DEFAULT_STT_OPTIONS.utteranceEndMs,
-    vad_events: options.vadEvents ?? DEFAULT_STT_OPTIONS.vadEvents,
-  };
-
-  return deepgram.listen.live(config);
-};
 
 // Convert text to speech using Deepgram aura return buffer containing audio data
 export const textToSpeech = async (

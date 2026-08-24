@@ -160,7 +160,7 @@ export default function BillingPage() {
       }
 
       if (data?.url) {
-        window.location.href = data.url;
+        window.location.assign(data.url);
         return;
       }
 
@@ -196,7 +196,7 @@ export default function BillingPage() {
       }
 
       if (data?.url) {
-        window.location.href = data.url;
+        window.location.assign(data.url);
         return;
       }
 

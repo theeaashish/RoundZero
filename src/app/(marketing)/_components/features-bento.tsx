@@ -13,6 +13,27 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
+const VOICE_MODE_WAVEFORM_BARS = [
+  { height: 12, duration: 0.6 },
+  { height: 18, duration: 0.75 },
+  { height: 8, duration: 0.55 },
+  { height: 22, duration: 0.8 },
+  { height: 14, duration: 0.65 },
+  { height: 24, duration: 0.7 },
+  { height: 16, duration: 0.6 },
+  { height: 20, duration: 0.75 },
+  { height: 10, duration: 0.55 },
+  { height: 22, duration: 0.8 },
+  { height: 18, duration: 0.7 },
+  { height: 14, duration: 0.6 },
+  { height: 24, duration: 0.75 },
+  { height: 12, duration: 0.65 },
+  { height: 20, duration: 0.7 },
+  { height: 16, duration: 0.6 },
+  { height: 10, duration: 0.55 },
+  { height: 6, duration: 0.5 },
+];
+
 export function FeaturesBento() {
   return (
     <section
@@ -126,14 +147,14 @@ export function FeaturesBento() {
 
             {/* Visual simulation for Card 2 */}
             <div className="mt-8 flex items-center justify-center gap-1 h-8 bg-zinc-100 dark:bg-[#07080a] border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 overflow-hidden select-none opacity-80 group-hover:opacity-100 transition-opacity">
-              {Array.from({ length: 18 }).map((_, i) => (
+              {VOICE_MODE_WAVEFORM_BARS.map((bar, i) => (
                 <motion.div
                   key={i}
                   className="w-[2px] bg-primary rounded-full"
-                  animate={{ height: [4, Math.random() * 20 + 4, 4] }}
+                  animate={{ height: [4, bar.height, 4] }}
                   transition={{
                     repeat: Infinity,
-                    duration: 0.5 + Math.random() * 0.3,
+                    duration: bar.duration,
                   }}
                 />
               ))}

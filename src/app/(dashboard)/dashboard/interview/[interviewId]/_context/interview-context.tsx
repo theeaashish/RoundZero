@@ -8,13 +8,14 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import { toast } from "sonner";
 import { orpc } from "@/lib/orpc-client";
 import type { INTERVIEW_STATUS } from "@/server/routers/interview/schemas";
-import { useInterviewMedia } from "../_hooks/useInterviewMedia";
+import { useInterviewMedia } from "../_hooks/use-interview-media";
 import type { InterviewData, Message } from "./types";
 
 type InterviewStatus = keyof typeof INTERVIEW_STATUS;
@@ -90,6 +91,16 @@ export const InterviewContextProvider = ({
       enabled: !!interviewId,
     }),
   );
+
+  // Boost recognition of the role's tech vocabulary (nova-3 keyterm boosting)
+  const sttKeyterms = useMemo(() => {
+    const raw = interviewDataResult?.interview?.techStack;
+    if (!raw) return [];
+    return raw
+      .split(/[,;|/]/)
+      .map((term) => term.trim())
+      .filter((term) => term.length > 1);
+  }, [interviewDataResult]);
 
   const stopAudioRef = useRef<() => void>(() => {});
 
@@ -169,7 +180,7 @@ export const InterviewContextProvider = ({
     playAudio,
     prepareAudio,
     startStreamingTurn,
-    queuePcmChunk,
+    queueAudioChunk,
     markAudioComplete,
     stopAudio,
     isRecording,
@@ -183,6 +194,7 @@ export const InterviewContextProvider = ({
     stopAllMedia,
   } = useInterviewMedia({
     isAssistantResponding: isResponding,
+    sttKeyterms,
     onBargeIn: handleBargeIn,
     onUtteranceDispatched: (finalizedText) => {
       const trimmed = finalizedText.trim();
@@ -325,6 +337,34 @@ export const InterviewContextProvider = ({
       let messageCompleted = false;
       let streamErrorMessage: string | null = null;
 
+      // Coalesce text deltas into one state update per flush window instead
+      // of re-rendering the whole message list on every token.
+      let pendingDelta = "";
+      let deltaFlushTimer: ReturnType<typeof setTimeout> | null = null;
+      const cancelDeltaFlush = () => {
+        if (deltaFlushTimer) {
+          clearTimeout(deltaFlushTimer);
+          deltaFlushTimer = null;
+        }
+        pendingDelta = "";
+      };
+      const flushPendingDelta = () => {
+        if (deltaFlushTimer) {
+          clearTimeout(deltaFlushTimer);
+          deltaFlushTimer = null;
+        }
+        if (!pendingDelta) return;
+        const text = pendingDelta;
+        pendingDelta = "";
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantTempId
+              ? { ...msg, content: msg.content + text, isTyping: true }
+              : msg,
+          ),
+        );
+      };
+
       try {
         const response = await fetch("/api/interview/chat/stream", {
           method: "POST",
@@ -401,22 +441,14 @@ export const InterviewContextProvider = ({
                 eventName === "text-delta" &&
                 typeof data.text === "string"
               ) {
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantTempId
-                      ? {
-                          ...msg,
-                          content: msg.content + data.text,
-                          isTyping: true,
-                        }
-                      : msg,
-                  ),
-                );
-              } else if (eventName === "audio-chunk" && data.pcmBase64) {
-                queuePcmChunk({
+                pendingDelta += data.text;
+                if (!deltaFlushTimer) {
+                  deltaFlushTimer = setTimeout(flushPendingDelta, 50);
+                }
+              } else if (eventName === "audio-chunk" && data.audioBase64) {
+                queueAudioChunk({
                   chunkIndex: data.chunkIndex,
-                  pcmBase64: data.pcmBase64,
-                  sampleRate: data.sampleRate ?? 24000,
+                  audioBase64: data.audioBase64,
                   turnId,
                 });
               } else if (eventName === "audio-complete") {
@@ -424,6 +456,8 @@ export const InterviewContextProvider = ({
               } else if (eventName === "message-complete") {
                 messageCompleted = true;
                 activeTurnIdRef.current = null;
+                // Server sends the authoritative full content; drop buffered deltas.
+                cancelDeltaFlush();
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === assistantTempId
@@ -438,7 +472,7 @@ export const InterviewContextProvider = ({
                 );
               } else if (eventName === "error") {
                 streamErrorMessage = data.message || "AI response error";
-                await reader.cancel().catch(() => {});
+                void reader.cancel().catch(() => {});
                 break streamLoop;
               }
             } catch (parseError) {
@@ -482,6 +516,7 @@ export const InterviewContextProvider = ({
         );
         return false;
       } finally {
+        cancelDeltaFlush();
         if (abortControllerRef.current === abortController) {
           abortControllerRef.current = null;
           if (activeTurnIdRef.current === turnId) {
@@ -497,7 +532,7 @@ export const InterviewContextProvider = ({
       restoreTranscript,
       prepareAudio,
       startStreamingTurn,
-      queuePcmChunk,
+      queueAudioChunk,
       markAudioComplete,
       interruptActiveTurn,
     ],

@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const DEFAULT_VOLUME = 1;
-const DEFAULT_SAMPLE_RATE = 24000;
 
-interface PcmChunk {
+interface AudioChunk {
   chunkIndex: number;
-  pcmBase64: string;
-  sampleRate?: number;
+  /** Base64-encoded MP3 audio for one sentence */
+  audioBase64: string;
   turnId: string;
 }
 
@@ -18,7 +17,7 @@ export interface StreamingAudioPlayerState {
   setVolume: (volume: number) => void;
   prepare: () => Promise<void>;
   startStreamingTurn: (turnId: string) => void;
-  queuePcmChunk: (chunk: PcmChunk) => void;
+  queueAudioChunk: (chunk: AudioChunk) => void;
   markAudioComplete: (turnId: string) => void;
   playEncodedAudio: (audioUrl: string) => void;
   stop: () => void;
@@ -37,6 +36,10 @@ export const useStreamingAudioPlayer = (): StreamingAudioPlayerState => {
   const activeTurnIdRef = useRef<string | null>(null);
   const isDrainingRef = useRef(false);
   const isStreamCompleteRef = useRef(false);
+  // Chunks handed to decodeAudioData but not yet resolved — "audio-complete"
+  // can arrive while the last sentence is still decoding, so completion must
+  // wait for these too or isPlaying flickers off early.
+  const pendingDecodesRef = useRef(0);
 
   const legacyAudioRef = useRef<HTMLAudioElement | null>(null);
   const legacyPlaybackGenerationRef = useRef(0);
@@ -115,18 +118,24 @@ export const useStreamingAudioPlayer = (): StreamingAudioPlayerState => {
     [stop],
   );
 
+  const maybeFinishPlayback = useCallback(() => {
+    if (
+      isStreamCompleteRef.current &&
+      activeSourcesRef.current.size === 0 &&
+      pendingChunksRef.current.size === 0 &&
+      pendingDecodesRef.current === 0
+    ) {
+      setIsPlaying(false);
+    }
+  }, []);
+
   const markAudioComplete = useCallback(
     (turnId: string) => {
       if (activeTurnIdRef.current !== turnId) return;
       isStreamCompleteRef.current = true;
-      if (
-        activeSourcesRef.current.size === 0 &&
-        pendingChunksRef.current.size === 0
-      ) {
-        setIsPlaying(false);
-      }
+      maybeFinishPlayback();
     },
-    [],
+    [maybeFinishPlayback],
   );
 
   const scheduleBuffer = useCallback(
@@ -145,19 +154,13 @@ export const useStreamingAudioPlayer = (): StreamingAudioPlayerState => {
       source.onended = () => {
         source.disconnect();
         activeSourcesRef.current.delete(source);
-        if (
-          activeSourcesRef.current.size === 0 &&
-          pendingChunksRef.current.size === 0 &&
-          isStreamCompleteRef.current
-        ) {
-          setIsPlaying(false);
-        }
+        maybeFinishPlayback();
       };
 
       source.start(scheduleTime);
       setIsPlaying(true);
     },
-    [],
+    [maybeFinishPlayback],
   );
 
   const drainPendingChunks = useCallback(async () => {
@@ -201,15 +204,10 @@ export const useStreamingAudioPlayer = (): StreamingAudioPlayerState => {
     await drainPendingChunks();
   }, [drainPendingChunks, getOrCreateAudioGraph]);
 
-  const queuePcmChunk = useCallback(
-    ({
-      chunkIndex,
-      pcmBase64,
-      sampleRate = DEFAULT_SAMPLE_RATE,
-      turnId,
-    }: PcmChunk) => {
+  const queueAudioChunk = useCallback(
+    ({ chunkIndex, audioBase64, turnId }: AudioChunk) => {
       if (
-        !pcmBase64 ||
+        !audioBase64 ||
         activeTurnIdRef.current !== turnId ||
         !Number.isInteger(chunkIndex) ||
         chunkIndex < expectedChunkIndexRef.current ||
@@ -220,40 +218,60 @@ export const useStreamingAudioPlayer = (): StreamingAudioPlayerState => {
 
       try {
         const { context } = getOrCreateAudioGraph();
-        const binary = window.atob(pcmBase64);
-        const sampleCount = Math.floor(binary.length / 2);
-        if (sampleCount === 0) return;
 
-        const bytes = new Uint8Array(sampleCount * 2);
+        const binary = window.atob(audioBase64);
+        const bytes = new Uint8Array(binary.length);
         for (let index = 0; index < bytes.length; index += 1) {
           bytes[index] = binary.charCodeAt(index);
         }
+        if (bytes.byteLength === 0) return;
 
-        const dataView = new DataView(bytes.buffer);
-        const audioBuffer = context.createBuffer(1, sampleCount, sampleRate);
-        const channelData = audioBuffer.getChannelData(0);
-        for (let index = 0; index < sampleCount; index += 1) {
-          channelData[index] = dataView.getInt16(index * 2, true) / 32768;
-        }
+        // decodeAudioData resamples to the context rate and hands back a ready
+        // AudioBuffer — no manual Int16→Float32 conversion. Chunks may finish
+        // decoding out of order; the expectedChunkIndex drain restores order.
+        pendingDecodesRef.current += 1;
+        context
+          .decodeAudioData(bytes.buffer)
+          .catch((error) => {
+            console.error("[StreamingAudioPlayer] Chunk decode failed:", error);
+            // Substitute near-silence so one bad sentence can't stall the
+            // whole ordered playback pipeline.
+            return context.createBuffer(1, 1, context.sampleRate);
+          })
+          .then((audioBuffer) => {
+            if (activeTurnIdRef.current !== turnId) return;
 
-        pendingChunksRef.current.set(chunkIndex, audioBuffer);
-        void drainPendingChunks();
+            pendingChunksRef.current.set(chunkIndex, audioBuffer);
+            void drainPendingChunks();
+          })
+          .finally(() => {
+            pendingDecodesRef.current -= 1;
+            maybeFinishPlayback();
+          });
       } catch (error) {
-        console.error("[StreamingAudioPlayer] Invalid PCM chunk:", error);
+        console.error("[StreamingAudioPlayer] Invalid audio chunk:", error);
       }
     },
-    [drainPendingChunks, getOrCreateAudioGraph],
+    [drainPendingChunks, getOrCreateAudioGraph, maybeFinishPlayback],
   );
 
   const playEncodedAudio = useCallback(
     (audioUrl: string) => {
       stop();
 
-      const audio = legacyAudioRef.current ?? new Audio();
+      const existingAudio = legacyAudioRef.current;
+      if (existingAudio) {
+        existingAudio.onplay = null;
+        existingAudio.onended = null;
+        existingAudio.onerror = null;
+        existingAudio.pause();
+        existingAudio.src = "";
+      }
+
+      const audio = new Audio(audioUrl);
       legacyAudioRef.current = audio;
       const generation = ++legacyPlaybackGenerationRef.current;
 
-      audio.src = audioUrl;
       audio.volume = volume;
       audio.onplay = () => {
         if (legacyPlaybackGenerationRef.current === generation) {
@@ -318,7 +336,7 @@ export const useStreamingAudioPlayer = (): StreamingAudioPlayerState => {
     setVolume,
     prepare,
     startStreamingTurn,
-    queuePcmChunk,
+    queueAudioChunk,
     markAudioComplete,
     playEncodedAudio,
     stop,

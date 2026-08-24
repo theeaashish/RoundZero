@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { STORAGE_CONFIG } from "@/config/storage";
 import db from "@/lib/prisma";
-import { S3 } from "@/lib/s3Client";
+import { S3 } from "@/lib/s3-client";
 import type { Context } from "@/server/orpc";
 
 import {
