@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Code2, Copy, Maximize2 } from "lucide-react";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -19,7 +19,7 @@ interface CodeSnippetProps {
   className?: string;
 }
 
-export function CodeSnippet({
+export const CodeSnippet = memo(function CodeSnippet({
   code,
   language,
   title,
@@ -84,4 +84,4 @@ export function CodeSnippet({
       </CardContent>
     </Card>
   );
-}
+});

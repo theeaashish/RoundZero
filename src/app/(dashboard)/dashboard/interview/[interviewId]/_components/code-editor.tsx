@@ -10,7 +10,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -114,7 +114,7 @@ interface CodeEditorProps {
   onSubmit?: (code: string, language: string) => Promise<void>;
 }
 
-export function CodeEditor({
+export const CodeEditor = memo(function CodeEditor({
   className,
   isExpanded = false,
   onToggleExpand,
@@ -295,4 +295,4 @@ export function CodeEditor({
       )}
     </div>
   );
-}
+});

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useInterview } from "../_context/interview-context";
+import type { Message } from "./chat-message";
 import { CodeEditor } from "./code-editor";
 import { ControlBar } from "./control-bar";
 import { InterviewChat } from "./interview-chat";
@@ -35,6 +36,7 @@ export function InterviewSession() {
   const [isEditorExpanded, setIsEditorExpanded] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [showMicReminder, setShowMicReminder] = useState(false);
+  const messageCacheRef = useRef<Map<string, Message>>(new Map());
 
   // Auto-start interview if in SETUP
   useEffect(() => {
@@ -99,23 +101,77 @@ export function InterviewSession() {
     }
   }, [isRecording]);
 
-  const chatMessages = useMemo(
-    () =>
-      messages.map((message) => ({
+  // Preserve referential identity for unchanging past messages so React skips reconciliation
+  const chatMessages = useMemo(() => {
+    const cache = messageCacheRef.current;
+    const nextMap = new Map<string, Message>();
+
+    return messages.map((message) => {
+      const formattedTimestamp = message.createdAt
+        ? new Date(message.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "";
+      const isTyping = message.isTyping ?? false;
+
+      const cached = cache.get(message.id);
+      if (
+        cached &&
+        cached.content === message.content &&
+        cached.isTyping === isTyping &&
+        cached.codeSnippet === message.codeSnippet &&
+        cached.language === message.language &&
+        cached.role === message.role &&
+        cached.timestamp === formattedTimestamp
+      ) {
+        nextMap.set(message.id, cached);
+        return cached;
+      }
+
+      const nextObj: Message = {
         id: message.id,
         role: message.role,
         content: message.content,
         codeSnippet: message.codeSnippet,
         language: message.language,
-        timestamp: message.createdAt
-          ? new Date(message.createdAt).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : "",
-        isTyping: message.isTyping ?? false,
-      })),
-    [messages],
+        timestamp: formattedTimestamp,
+        isTyping,
+      };
+      nextMap.set(message.id, nextObj);
+      return nextObj;
+    });
+  }, [messages]);
+
+  useEffect(() => {
+    messageCacheRef.current = new Map(chatMessages.map((m) => [m.id, m]));
+  }, [chatMessages]);
+
+  const handleCodeSubmit = useCallback(
+    async (code: string, language: string) => {
+      await sendMessage("Shared a code submission for review.", {
+        codeSnippet: code,
+        language,
+      });
+    },
+    [sendMessage],
+  );
+
+  const handleEndInterview = useCallback(() => {
+    endInterview(elapsedTime);
+  }, [endInterview, elapsedTime]);
+
+  const handleToggleChat = useCallback(() => {
+    setIsChatOpen((prev) => !prev);
+  }, []);
+
+  const handleToggleExpand = useCallback(() => {
+    setIsEditorExpanded((prev) => !prev);
+  }, []);
+
+  const techStackArray = useMemo(
+    () => (interview?.techStack ? interview.techStack.split(",") : []),
+    [interview?.techStack],
   );
 
   if (isLoading || !interview || !isHydrated) {
@@ -167,7 +223,7 @@ export function InterviewSession() {
           questionsAnswered={questionsAnswered}
           totalQuestions={targetQuestionCount}
           currentTopic={interview.techStack || "General"}
-          techStack={interview.techStack ? interview.techStack.split(",") : []}
+          techStack={techStackArray}
           currentPhase={currentPhase}
           connectionState={connectionState}
         />
@@ -219,13 +275,8 @@ export function InterviewSession() {
               <CodeEditor
                 className="h-full border-0 rounded-none"
                 isExpanded={isEditorExpanded}
-                onToggleExpand={() => setIsEditorExpanded(!isEditorExpanded)}
-                onSubmit={async (code, language) => {
-                  await sendMessage("Shared a code submission for review.", {
-                    codeSnippet: code,
-                    language,
-                  });
-                }}
+                onToggleExpand={handleToggleExpand}
+                onSubmit={handleCodeSubmit}
               />
             </div>
           </>
@@ -260,11 +311,11 @@ export function InterviewSession() {
       </div>
 
       <ControlBar
-        onToggleChat={() => setIsChatOpen(!isChatOpen)}
+        onToggleChat={handleToggleChat}
         isChatOpen={isChatOpen}
         isMicOn={isRecording}
         onToggleMic={toggleMic}
-        onEndInterview={() => endInterview(elapsedTime)}
+        onEndInterview={handleEndInterview}
         isEnding={isEnding}
       />
     </div>

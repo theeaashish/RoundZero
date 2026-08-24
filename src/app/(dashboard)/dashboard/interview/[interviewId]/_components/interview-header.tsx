@@ -2,6 +2,7 @@
 
 import { ChevronLeft, Clock, MoreVertical, Wifi } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { memo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,7 +29,7 @@ const STATUS_TEXT: Record<InterviewHeaderProps["status"], string> = {
   ended: "Interview ended",
 };
 
-export function InterviewHeader({
+export const InterviewHeader = memo(function InterviewHeader({
   jobTitle,
   interviewType,
   duration,
@@ -122,4 +123,4 @@ export function InterviewHeader({
       </div>
     </header>
   );
-}
+});

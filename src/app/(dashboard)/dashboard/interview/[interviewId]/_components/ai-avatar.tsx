@@ -1,6 +1,7 @@
 "use client";
 
 import { Volume2 } from "lucide-react";
+import { memo } from "react";
 import { cn } from "@/lib/utils";
 
 interface AIAvatarProps {
@@ -10,7 +11,7 @@ interface AIAvatarProps {
   hideLabels?: boolean;
 }
 
-export function AIAvatar({
+export const AIAvatar = memo(function AIAvatar({
   isSpeaking,
   name,
   size = "lg",
@@ -137,4 +138,4 @@ export function AIAvatar({
       )}
     </div>
   );
-}
+});

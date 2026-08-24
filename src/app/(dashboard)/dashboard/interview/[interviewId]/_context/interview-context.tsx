@@ -337,22 +337,19 @@ export const InterviewContextProvider = ({
       let messageCompleted = false;
       let streamErrorMessage: string | null = null;
 
-      // Coalesce text deltas into one state update per flush window instead
-      // of re-rendering the whole message list on every token.
+      // Coalesce text deltas into display paint frames (via requestAnimationFrame)
+      // instead of thrashing the message list on every token or random timer ticks.
       let pendingDelta = "";
-      let deltaFlushTimer: ReturnType<typeof setTimeout> | null = null;
+      let deltaFlushRafId: number | null = null;
       const cancelDeltaFlush = () => {
-        if (deltaFlushTimer) {
-          clearTimeout(deltaFlushTimer);
-          deltaFlushTimer = null;
+        if (deltaFlushRafId !== null) {
+          cancelAnimationFrame(deltaFlushRafId);
+          deltaFlushRafId = null;
         }
         pendingDelta = "";
       };
       const flushPendingDelta = () => {
-        if (deltaFlushTimer) {
-          clearTimeout(deltaFlushTimer);
-          deltaFlushTimer = null;
-        }
+        deltaFlushRafId = null;
         if (!pendingDelta) return;
         const text = pendingDelta;
         pendingDelta = "";
@@ -442,8 +439,8 @@ export const InterviewContextProvider = ({
                 typeof data.text === "string"
               ) {
                 pendingDelta += data.text;
-                if (!deltaFlushTimer) {
-                  deltaFlushTimer = setTimeout(flushPendingDelta, 50);
+                if (deltaFlushRafId === null) {
+                  deltaFlushRafId = requestAnimationFrame(flushPendingDelta);
                 }
               } else if (eventName === "audio-chunk" && data.audioBase64) {
                 queueAudioChunk({

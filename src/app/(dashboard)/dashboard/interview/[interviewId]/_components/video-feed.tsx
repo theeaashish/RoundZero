@@ -1,7 +1,7 @@
 "use client";
 
 import { Camera, CameraOff, Mic, MicOff, User } from "lucide-react";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -18,7 +18,7 @@ interface VideoFeedProps {
   compact?: boolean;
 }
 
-export function VideoFeed({
+export const VideoFeed = memo(function VideoFeed({
   userName,
   isVideoOn: initialVideoOn = true,
   isMicOn: initialMicOn = true,
@@ -138,4 +138,4 @@ export function VideoFeed({
       </div>
     </div>
   );
-}
+});

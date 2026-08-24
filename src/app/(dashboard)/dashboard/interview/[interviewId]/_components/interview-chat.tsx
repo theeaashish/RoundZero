@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Mic, RefreshCw } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { memo, useCallback, useLayoutEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { AIAvatar } from "./ai-avatar";
 import { ChatMessage, type Message } from "./chat-message";
@@ -21,7 +21,7 @@ interface InterviewChatProps {
   className?: string;
 }
 
-export function InterviewChat({
+export const InterviewChat = memo(function InterviewChat({
   messages,
   isRecording,
   isPlaying,
@@ -36,25 +36,32 @@ export function InterviewChat({
 }: InterviewChatProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const previousScrollSignatureRef = useRef("");
+  const isNearBottomRef = useRef(true);
+  const prevMessageCountRef = useRef(messages.length);
+
   const visibleDraftTranscript =
     interimTranscript?.trim() || draftTranscript?.trim() || "";
   const isLiveTranscriptVisible = Boolean(interimTranscript?.trim());
 
-  // Auto-scroll to bottom on new messages or interim transcript changes
-  useEffect(() => {
-    const scrollSignature = `${messages.length}:${messages.at(-1)?.id ?? ""}:${
-      visibleDraftTranscript
-    }`;
+  const handleScroll = useCallback(() => {
+    if (!scrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    // Consider near bottom if within 100px
+    isNearBottomRef.current = scrollHeight - (scrollTop + clientHeight) < 100;
+  }, []);
 
-    if (scrollSignature === previousScrollSignatureRef.current) {
-      return;
+  // Fast direct pinning during streaming to prevent smooth scroll layout reflow thrashing
+  useLayoutEffect(() => {
+    const isNewMessage = messages.length > prevMessageCountRef.current;
+    prevMessageCountRef.current = messages.length;
+
+    if (isNewMessage) {
+      isNearBottomRef.current = true;
     }
 
-    previousScrollSignatureRef.current = scrollSignature;
-
-    if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: "smooth" });
+    if (isNearBottomRef.current && scrollRef.current) {
+      void visibleDraftTranscript;
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, visibleDraftTranscript]);
 
@@ -150,6 +157,7 @@ export function InterviewChat({
       <div
         className="flex-1 overflow-y-auto min-h-0 px-4 md:px-6 scrollbar-thin scrollbar-thumb-muted-foreground/20 hover:scrollbar-thumb-muted-foreground/40"
         ref={scrollRef}
+        onScroll={handleScroll}
       >
         <div className="flex flex-col gap-6 max-w-3xl mx-auto pb-32 pt-4">
           {messages.map((message) => (
@@ -197,4 +205,4 @@ export function InterviewChat({
       )}
     </div>
   );
-}
+});

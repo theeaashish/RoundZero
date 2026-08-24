@@ -14,7 +14,7 @@ import {
   Settings,
   Volume2,
 } from "lucide-react";
-import { useState } from "react";
+import { memo, useState } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,7 +45,7 @@ interface ControlBarProps {
   isEnding?: boolean;
 }
 
-export function ControlBar({
+export const ControlBar = memo(function ControlBar({
   onToggleChat,
   isChatOpen,
   isMicOn = false,
@@ -247,4 +247,4 @@ export function ControlBar({
       </div>
     </div>
   );
-}
+});

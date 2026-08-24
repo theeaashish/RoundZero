@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2, Circle, HelpCircle } from "lucide-react";
+import { memo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +15,7 @@ interface InterviewStatsProps {
   className?: string;
 }
 
-export function InterviewStats({
+export const InterviewStats = memo(function InterviewStats({
   questionsAnswered,
   totalQuestions,
   currentTopic,
@@ -109,4 +110,4 @@ export function InterviewStats({
       </div>
     </div>
   );
-}
+});
