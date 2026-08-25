@@ -1,225 +1,248 @@
 "use client";
 
-import { LayoutDashboard, LogOut, Menu, Settings, Target } from "lucide-react";
+import * as React from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { motion, useReducedMotion } from "framer-motion";
+import { LogOut, Menu, Target } from "lucide-react";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { ModeToggle } from "@/components/ui/theme-toggle";
 import { useSignOut } from "@/hooks/use-signout";
 import { authClient } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
+import { UserMenu } from "./user-menu";
+
+const NAV_LINKS = [
+  { href: "#features", label: "Features" },
+  { href: "/pricing", label: "Pricing" },
+  { href: "#demo", label: "Demo" },
+] as const;
+
+/* Same curve as the hero entrance so nav + hero land as one motion system. */
+const EASE = [0.23, 1, 0.32, 1] as const;
 
 export function Navbar() {
+  const pathname = usePathname();
   const { data: session } = authClient.useSession();
   const signOut = useSignOut();
+  const reduceMotion = useReducedMotion();
+  const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [isScrolled, setIsScrolled] = React.useState(false);
+
+  // Track window scroll state with passive listener
+  React.useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20);
+    };
+
+    handleScroll(); // Check initial scroll position on mount
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   return (
-    <nav className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl supports-backdrop-filter:bg-background/60">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between">
-          <Link
-            href="/"
-            className="flex items-center gap-2.5 font-bold text-xl"
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-linear-to-br from-primary via-primary to-violet-600 text-primary-foreground shadow-lg shadow-primary/20">
-              <Target className="h-5 w-5" />
-            </div>
-            <span className="tracking-tight">RoundZero</span>
-          </Link>
+    /* Entrance runs on this wrapper; no Tailwind transition-* here — it would
+       fight framer-motion's per-frame updates. The inner <nav> keeps its own
+       transition for the scroll state. */
+    <motion.header
+      initial={{ opacity: 0, y: reduceMotion ? 0 : -16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: reduceMotion ? 0.3 : 0.5,
+        ease: EASE,
+        opacity: { duration: reduceMotion ? 0.3 : 0.4 },
+      }}
+      className="fixed inset-x-0 top-0 z-50 flex justify-center px-4 pt-3 sm:pt-4"
+    >
+      <nav
+        aria-label="Main Navigation"
+        className={cn(
+          "flex w-full items-center justify-between transition-all duration-300 ease-out",
+          "h-14 rounded-full px-3.5 sm:px-4",
+          isScrolled
+            ? "max-w-4xl border border-border/50 bg-background/80 shadow-md shadow-black/3 backdrop-blur-xl dark:shadow-black/20"
+            : "max-w-6xl border border-transparent bg-transparent shadow-none backdrop-blur-none",
+        )}
+      >
+        {/* Brand Logo */}
+        <Link
+          href="/"
+          className="group flex items-center gap-2.5 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <div className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <Target className="size-4 stroke-[2.25]" />
+          </div>
+          <span className="text-[14px] font-semibold tracking-tight text-foreground">
+            RoundZero
+          </span>
+        </Link>
 
-          {/* Desktop Menu */}
-          <div className="hidden md:flex items-center gap-8 text-sm font-medium">
-            {[
-              { href: "#features", label: "Features" },
-              { href: "/pricing", label: "Pricing" },
-              { href: "#demo", label: "Demo" },
-            ].map((item) => (
+        {/* Desktop Nav Links */}
+        <div className="hidden items-center gap-1 md:flex">
+          {NAV_LINKS.map((item) => {
+            const isActive = pathname === item.href;
+            return (
               <Link
                 key={item.href}
                 href={item.href}
-                className="text-muted-foreground hover:text-foreground transition-colors duration-200"
+                className={cn(
+                  "relative rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors",
+                  isActive
+                    ? "text-foreground font-semibold"
+                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                )}
               >
                 {item.label}
               </Link>
-            ))}
-          </div>
-
-          <div className="hidden md:flex items-center gap-3">
-            {session ? (
-              <div className="flex items-center justify-center gap-4">
-                <Link
-                  href="/dashboard"
-                  className={buttonVariants({
-                    variant: "default",
-                    className: "shadow-lg shadow-primary/20",
-                  })}
-                >
-                  Start a mock now
-                </Link>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      className="relative h-9 w-9 rounded-full"
-                    >
-                      <Avatar className="h-9 w-9">
-                        <AvatarImage
-                          src={session.user.image || ""}
-                          alt={session.user.name || ""}
-                        />
-                        <AvatarFallback>
-                          {session.user.name?.charAt(0) || "U"}
-                        </AvatarFallback>
-                      </Avatar>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-56" align="end" forceMount>
-                    <DropdownMenuLabel className="font-normal">
-                      <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium leading-none">
-                          {session.user.name}
-                        </p>
-                        <p className="text-xs leading-none text-muted-foreground">
-                          {session.user.email}
-                        </p>
-                      </div>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <Link href="/dashboard">
-                        <LayoutDashboard className="mr-2 h-4 w-4" />
-                        Dashboard
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/dashboard/settings">
-                        <Settings className="mr-2 h-4 w-4" />
-                        Settings
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={signOut}>
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Log out
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            ) : (
-              <>
-                <Link
-                  href="/sign-in"
-                  className={buttonVariants({
-                    variant: "ghost",
-                    className: "text-muted-foreground hover:text-foreground",
-                  })}
-                >
-                  Sign In
-                </Link>
-                <Link
-                  href="/dashboard"
-                  className={buttonVariants({
-                    variant: "default",
-                    className: "shadow-lg shadow-primary/20",
-                  })}
-                >
-                  Start a mock now
-                </Link>
-              </>
-            )}
-            <ModeToggle />
-          </div>
-
-          {/* Mobile Menu */}
-          <Sheet>
-            <SheetTrigger asChild className="md:hidden">
-              <Button variant="ghost" size="icon">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="border-border">
-              <div className="flex flex-col gap-4 mt-8 px-2">
-                <Link
-                  href="#features"
-                  className="text-lg font-medium hover:text-primary transition-colors"
-                >
-                  Features
-                </Link>
-                <Link
-                  href="#pricing"
-                  className="text-lg font-medium hover:text-primary transition-colors"
-                >
-                  Pricing
-                </Link>
-                <Link
-                  href="#demo"
-                  className="text-lg font-medium hover:text-primary transition-colors"
-                >
-                  Live Demo
-                </Link>
-                <div className="h-px bg-border my-2" />
-                <div className="flex items-center justify-between">
-                  <span className="text-lg font-medium">Theme</span>
-                  <ModeToggle />
-                </div>
-                {session ? (
-                  <>
-                    <div className="flex items-center gap-3 py-2">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={session.user.image || ""} />
-                        <AvatarFallback>
-                          {session.user.name?.charAt(0) || "U"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">
-                          {session.user.name}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {session.user.email}
-                        </span>
-                      </div>
-                    </div>
-                    <Link
-                      href="/dashboard"
-                      className="text-lg font-medium hover:text-primary transition-colors"
-                    >
-                      Dashboard
-                    </Link>
-                    <Button
-                      variant="ghost"
-                      className="justify-start px-0 text-lg font-medium hover:bg-transparent hover:text-primary transition-colors"
-                      onClick={signOut}
-                    >
-                      Log out
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Link
-                      href="/sign-in"
-                      className="text-lg font-medium hover:text-primary transition-colors"
-                    >
-                      Sign In
-                    </Link>
-                    <Button className="w-full mt-2" asChild>
-                      <Link href="/dashboard">Start Practice - Free</Link>
-                    </Button>
-                  </>
-                )}
-              </div>
-            </SheetContent>
-          </Sheet>
+            );
+          })}
         </div>
-      </div>
-    </nav>
+
+        {/* Desktop Actions */}
+        <div className="hidden items-center gap-2 md:flex">
+          <ModeToggle />
+
+          {session ? (
+            <div className="flex items-center gap-1.5">
+              <Button size="sm" asChild>
+                <Link href="/dashboard">Dashboard</Link>
+              </Button>
+              <UserMenu />
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/sign-in">Sign in</Link>
+              </Button>
+              <Button size="sm" asChild>
+                <Link href="/dashboard">Start practicing</Link>
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Mobile Trigger */}
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetTrigger asChild className="md:hidden">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Menu className="size-4.5" />
+              <span className="sr-only">Toggle navigation</span>
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="right" className="flex w-80 flex-col p-6">
+            <SheetHeader className="p-0 text-left">
+              <SheetTitle className="flex items-center gap-2.5 text-sm font-semibold">
+                RoundZero
+              </SheetTitle>
+              <SheetDescription className="sr-only">
+                Navigation links
+              </SheetDescription>
+            </SheetHeader>
+
+            <nav className="mt-8 flex flex-col gap-1">
+              {NAV_LINKS.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    "flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                    pathname === item.href
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                  )}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+
+            <div className="mt-auto flex flex-col gap-4 border-t border-border/60 pt-6">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Theme
+                </span>
+                <ModeToggle />
+              </div>
+
+              {session ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-muted/30 p-2.5">
+                    <Avatar className="size-9">
+                      <AvatarImage src={session.user.image || ""} />
+                      <AvatarFallback className="text-xs uppercase">
+                        {session.user.name?.slice(0, 2) || "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-medium text-foreground">
+                        {session.user.name}
+                      </p>
+                      <p className="truncate text-[11px] text-muted-foreground">
+                        {session.user.email}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full justify-center text-xs"
+                    asChild
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    <Link href="/dashboard">Dashboard</Link>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-center text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => {
+                      setMobileOpen(false);
+                      signOut();
+                    }}
+                  >
+                    <LogOut className="mr-1.5 size-3.5" />
+                    Log out
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs"
+                    asChild
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    <Link href="/sign-in">Sign in</Link>
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="w-full text-xs"
+                    asChild
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    <Link href="/dashboard">Start practicing</Link>
+                  </Button>
+                </div>
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
+      </nav>
+    </motion.header>
   );
 }

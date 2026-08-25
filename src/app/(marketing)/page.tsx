@@ -18,21 +18,7 @@ export const metadata = {
 
 export default function Home() {
   return (
-    <div className="relative min-h-screen bg-background text-foreground font-sans overflow-x-hidden noise-bg">
-      {/* Premium gradient mesh background */}
-      <div className="pointer-events-none fixed inset-0 -z-10 bg-background">
-        {/* Solid muted shapes instead of gradients for brutalist/distinctive look */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-250 h-250 rounded-full bg-primary/5 blur-3xl animate-pulse" />
-        <div
-          className="absolute top-[40%] -right-[20%] w-200 h-200 rounded-full bg-primary/5 blur-3xl animate-pulse"
-          style={{ animationDelay: "2s" }}
-        />
-        <div
-          className="absolute top-[70%] -left-[10%] w-150 h-150 rounded-full bg-primary/5 blur-3xl animate-pulse"
-          style={{ animationDelay: "4s" }}
-        />
-      </div>
-
+    <div className="relative min-h-screen overflow-x-hidden bg-background font-sans text-foreground">
       <Navbar />
       <main className="relative z-1">
         <Hero />
