@@ -22,7 +22,9 @@ export const maxDuration = 120;
 
 const MAX_MESSAGE_LENGTH = 10_000;
 const MAX_CODE_LENGTH = 50_000;
+const MAX_ASSISTANT_REPLY_LENGTH = 30_000;
 const MAX_TTS_CONCURRENCY = 4;
+const TTS_CHUNK_TIMEOUT_MS = 15_000;
 
 const interviewChatStreamInput = z
   .object({
@@ -176,16 +178,14 @@ export async function POST(request: Request) {
       );
     }
   } else {
-    const [createdUserMsg, history] = await Promise.all([
-      createUserInterviewMessageIfActive({
-        interviewId: interview.id,
-        turnId: input.turnId,
-        content: input.message || "",
-        codeSnippet: input.codeSnippet ?? undefined,
-        language: input.language || undefined,
-      }),
-      listInterviewMessages(interview.id),
-    ]);
+    // Sequentially create message first to avoid race condition with history fetch
+    const createdUserMsg = await createUserInterviewMessageIfActive({
+      interviewId: interview.id,
+      turnId: input.turnId,
+      content: input.message || "",
+      codeSnippet: input.codeSnippet ?? undefined,
+      language: input.language || undefined,
+    });
 
     if (signal.aborted) {
       const { clearedActiveTurn } = await cancelInterviewTurn({
@@ -212,6 +212,7 @@ export async function POST(request: Request) {
     }
 
     userMessage = createdUserMsg;
+    const history = await listInterviewMessages(interview.id);
     mergedHistory = mergeInterviewHistory(history, createdUserMsg);
   }
 
@@ -219,6 +220,8 @@ export async function POST(request: Request) {
 
   const stream = new ReadableStream({
     async start(controller) {
+      let turnCompleted = false;
+
       const sendEvent = (event: string, data: Record<string, unknown>) => {
         if (signal.aborted) return;
         try {
@@ -259,21 +262,52 @@ export async function POST(request: Request) {
         // replies don't burst Deepgram with dozens of simultaneous requests.
         let inFlightTts = 0;
         const ttsWaiters: (() => void)[] = [];
-        const acquireTtsSlot = () =>
-          new Promise<void>((resolve) => {
-            if (inFlightTts < MAX_TTS_CONCURRENCY) {
+
+        const acquireTtsSlot = async (
+          ttsSignal: AbortSignal,
+        ): Promise<void> => {
+          if (ttsSignal.aborted) {
+            throw new DOMException("Aborted", "AbortError");
+          }
+
+          if (inFlightTts < MAX_TTS_CONCURRENCY) {
+            inFlightTts += 1;
+            return;
+          }
+
+          await new Promise<void>((resolve, reject) => {
+            let settled = false;
+
+            const onAbort = () => {
+              if (settled) return;
+              settled = true;
+              ttsSignal.removeEventListener("abort", onAbort);
+              const idx = ttsWaiters.indexOf(waiter);
+              if (idx !== -1) {
+                ttsWaiters.splice(idx, 1);
+              }
+              reject(new DOMException("Aborted", "AbortError"));
+            };
+
+            const waiter = () => {
+              if (settled) return;
+              settled = true;
+              ttsSignal.removeEventListener("abort", onAbort);
               inFlightTts += 1;
               resolve();
-              return;
-            }
-            ttsWaiters.push(() => {
-              inFlightTts += 1;
-              resolve();
-            });
+            };
+
+            ttsSignal.addEventListener("abort", onAbort, { once: true });
+            ttsWaiters.push(waiter);
           });
+        };
+
         const releaseTtsSlot = () => {
           inFlightTts -= 1;
-          ttsWaiters.shift()?.();
+          const nextWaiter = ttsWaiters.shift();
+          if (nextWaiter) {
+            nextWaiter();
+          }
         };
 
         const emitReadyChunks = () => {
@@ -301,10 +335,20 @@ export async function POST(request: Request) {
           const currentSourceIndex = sourceChunkIndex;
           sourceChunkIndex += 1;
 
-          const task = acquireTtsSlot()
-            .then(() => synthesizeMp3Chunk(chunkText, { signal }))
+          let slotAcquired = false;
+
+          const task = acquireTtsSlot(signal)
+            .then(async () => {
+              slotAcquired = true;
+              const timeoutSignal = AbortSignal.timeout(TTS_CHUNK_TIMEOUT_MS);
+              const combinedSignal = AbortSignal.any([signal, timeoutSignal]);
+              return synthesizeMp3Chunk(chunkText, { signal: combinedSignal });
+            })
             .then((pcmBuffer) => {
-              releaseTtsSlot();
+              if (slotAcquired) {
+                releaseTtsSlot();
+                slotAcquired = false;
+              }
               if (signal.aborted) return;
               completedChunks.set(currentSourceIndex, {
                 sourceIndex: currentSourceIndex,
@@ -314,11 +358,18 @@ export async function POST(request: Request) {
               emitReadyChunks();
             })
             .catch((error) => {
-              releaseTtsSlot();
+              if (slotAcquired) {
+                releaseTtsSlot();
+                slotAcquired = false;
+              }
               if (signal.aborted) return;
               console.error("[TTS Synthesis Error]", {
                 chunkIndex: currentSourceIndex,
                 error,
+              });
+              sendEvent("audio-error", {
+                turnId: input.turnId,
+                chunkIndex: currentSourceIndex,
               });
               completedChunks.set(currentSourceIndex, {
                 sourceIndex: currentSourceIndex,
@@ -333,6 +384,20 @@ export async function POST(request: Request) {
 
         for await (const token of result.textStream) {
           if (signal.aborted) break;
+
+          if (
+            fullAssistantReply.length + token.length >
+            MAX_ASSISTANT_REPLY_LENGTH
+          ) {
+            console.warn(
+              "[Interview Chat SSE] Assistant reply exceeded max length limit",
+              {
+                interviewId: interview.id,
+                turnId: input.turnId,
+              },
+            );
+            break;
+          }
 
           fullAssistantReply += token;
           sendEvent("text-delta", { turnId: input.turnId, text: token });
@@ -373,7 +438,6 @@ export async function POST(request: Request) {
           turnId: input.turnId,
           content: trimmedReply,
         });
-        if (signal.aborted) return;
 
         if (!assistantMessage) {
           sendEvent("error", {
@@ -382,6 +446,9 @@ export async function POST(request: Request) {
           });
           return;
         }
+
+        turnCompleted = true;
+        if (signal.aborted) return;
 
         sendEvent("message-complete", {
           turnId: input.turnId,
@@ -405,15 +472,6 @@ export async function POST(request: Request) {
           }
         }
       } catch (error) {
-        // Always release the activeTurnId lock — otherwise a Gemini/stream
-        // failure permanently bricks the interview with 409 "response in
-        // progress" because createAssistantInterviewMessageIfActive never ran.
-        await cancelInterviewTurn({
-          interviewId: interview.id,
-          userId,
-          turnId: input.turnId,
-        }).catch(() => {});
-
         if (!signal.aborted) {
           console.error("[Interview Chat SSE Stream Error]", error);
           sendEvent("error", {
@@ -423,6 +481,14 @@ export async function POST(request: Request) {
           });
         }
       } finally {
+        if (!turnCompleted) {
+          await cancelInterviewTurn({
+            interviewId: interview.id,
+            userId,
+            turnId: input.turnId,
+          }).catch(() => {});
+        }
+
         try {
           controller.close();
         } catch {
