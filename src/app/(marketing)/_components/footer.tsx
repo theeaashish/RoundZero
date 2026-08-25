@@ -1,14 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import {
-  ArrowRight,
-  Github,
-  Linkedin,
-  Mail,
-  Target,
-  Twitter,
-} from "lucide-react";
+import { ArrowRight, Github, Linkedin, Mail, Target, Twitter } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,180 +38,132 @@ const socialLinks = [
   { icon: Github, href: "#", label: "GitHub" },
 ];
 
+function FooterColumn({
+  title,
+  links,
+}: {
+  title: string;
+  links: readonly { label: string; href: string }[];
+}) {
+  return (
+    <div>
+      <h4 className="text-sm font-medium">{title}</h4>
+      <ul className="mt-4 space-y-2.5">
+        {links.map((link) => (
+          <li key={link.label}>
+            <Link
+              href={link.href}
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {link.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function Footer() {
   return (
-    <footer className="relative overflow-hidden">
-      {/* CTA Section */}
-      <div className="py-24 lg:py-32 relative">
-        {/* Divider */}
-        <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-border to-transparent" />
-
-        {/* Background fill removed for consistency */}
-
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative">
+    <footer className="border-t border-border">
+      {/* CTA */}
+      <div className="py-20 lg:py-28">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <motion.div
-            className="text-center max-w-4xl mx-auto"
-            initial={{ opacity: 0, y: 20 }}
+            className="mx-auto max-w-2xl text-center"
+            initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
+            transition={{ duration: 0.5 }}
           >
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold tracking-tight mb-6">
-              Ready to ace your
-              <span className="block mt-2 text-primary">next interview?</span>
+            <h2 className="text-balance font-heading text-3xl font-medium tracking-tight sm:text-4xl">
+              Ready for your next interview?
             </h2>
-            <p className="text-lg lg:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
-              Join thousands of candidates who've transformed their interview
-              performance with RoundZero.
+            <p className="mx-auto mt-4 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground">
+              Start with a free practice loop today. Your first scorecard is a
+              few minutes away.
             </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5">
-              <Button
-                size="lg"
-                className="h-12 px-6 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/95 transition-all duration-200 group w-full sm:w-auto"
-                asChild
-              >
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Button size="lg" asChild>
                 <Link href="/sign-in">
                   Start practicing for free
-                  <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  <ArrowRight />
                 </Link>
               </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-12 px-6 text-sm font-semibold rounded-lg border border-border/60 hover:bg-accent hover:text-accent-foreground w-full sm:w-auto group backdrop-blur-sm bg-background/30"
-                asChild
-              >
-                <Link href="#demo">Schedule a demo</Link>
+              <Button size="lg" variant="outline" asChild>
+                <Link href="#demo">See a demo</Link>
               </Button>
             </div>
           </motion.div>
         </div>
       </div>
 
-      {/* Main Footer */}
-      <div className="py-16 lg:py-20 border-t border-border/50">
+      {/* Main footer */}
+      <div className="border-t border-border py-14 lg:py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-8 lg:gap-12">
-            {/* Brand */}
+          <div className="grid grid-cols-2 gap-10 md:grid-cols-6 lg:gap-12">
+            {/* Brand + newsletter */}
             <div className="col-span-2">
               <Link
                 href="/"
-                className="flex items-center gap-2.5 font-bold text-xl mb-6"
+                className="flex items-center gap-2.5"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-                  <Target className="h-5 w-5" />
-                </div>
-                <span>RoundZero</span>
+                <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                  <Target className="size-4 stroke-[2.25]" />
+                </span>
+                <span className="font-heading text-[15px] font-semibold tracking-tight">
+                  RoundZero
+                </span>
               </Link>
-              <p className="text-sm text-muted-foreground mb-6 max-w-xs leading-relaxed">
-                The AI-powered interview preparation platform that helps you
-                land your dream job.
+              <p className="mt-5 max-w-xs text-sm leading-relaxed text-muted-foreground">
+                AI-powered interview practice with structured, honest feedback.
               </p>
 
-              {/* Newsletter */}
-              <div className="space-y-3">
-                <p className="text-sm font-semibold">
-                  Subscribe to our newsletter
-                </p>
-                <div className="flex gap-2">
+              <div className="mt-6 max-w-xs space-y-2.5">
+                <p className="text-sm font-medium">Product updates</p>
+                <form
+                  onSubmit={(e) => e.preventDefault()}
+                  className="flex gap-2"
+                >
                   <Input
                     type="email"
-                    placeholder="Enter your email"
-                    className="h-11 bg-background/50 border-border/50 focus:border-primary"
+                    required
+                    placeholder="you@example.com"
+                    aria-label="Email address"
+                    className="h-9"
                   />
-                  <Button size="sm" className="h-11 px-4 shrink-0">
-                    <Mail className="h-4 w-4" />
+                  <Button type="submit" size="icon" className="size-9 shrink-0">
+                    <Mail />
+                    <span className="sr-only">Subscribe</span>
                   </Button>
-                </div>
+                </form>
                 <p className="text-xs text-muted-foreground">
                   No spam. Unsubscribe anytime.
                 </p>
               </div>
             </div>
 
-            {/* Product */}
-            <div>
-              <h4 className="font-semibold mb-4">Product</h4>
-              <ul className="space-y-3">
-                {footerLinks.product.map((link) => (
-                  <li key={link.label}>
-                    <Link
-                      href={link.href}
-                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Company */}
-            <div>
-              <h4 className="font-semibold mb-4">Company</h4>
-              <ul className="space-y-3">
-                {footerLinks.company.map((link) => (
-                  <li key={link.label}>
-                    <Link
-                      href={link.href}
-                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Resources */}
-            <div>
-              <h4 className="font-semibold mb-4">Resources</h4>
-              <ul className="space-y-3">
-                {footerLinks.resources.map((link) => (
-                  <li key={link.label}>
-                    <Link
-                      href={link.href}
-                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Legal */}
-            <div>
-              <h4 className="font-semibold mb-4">Legal</h4>
-              <ul className="space-y-3">
-                {footerLinks.legal.map((link) => (
-                  <li key={link.label}>
-                    <Link
-                      href={link.href}
-                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <FooterColumn title="Product" links={footerLinks.product} />
+            <FooterColumn title="Company" links={footerLinks.company} />
+            <FooterColumn title="Resources" links={footerLinks.resources} />
+            <FooterColumn title="Legal" links={footerLinks.legal} />
           </div>
 
           {/* Bottom bar */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pt-12 mt-12 border-t border-border/50">
+          <div className="mt-12 flex flex-col items-center justify-between gap-6 border-t border-border pt-8 sm:flex-row">
             <p className="text-sm text-muted-foreground">
               © {new Date().getFullYear()} RoundZero. All rights reserved.
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               {socialLinks.map((social) => (
                 <Link
                   key={social.label}
                   href={social.href}
-                  className="h-10 w-10 rounded-xl bg-muted/50 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-300"
                   aria-label={social.label}
+                  className="flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
-                  <social.icon className="h-4 w-4" />
+                  <social.icon className="size-4" />
                 </Link>
               ))}
             </div>

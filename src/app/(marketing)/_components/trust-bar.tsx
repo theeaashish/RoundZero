@@ -35,80 +35,52 @@ const stats = [
   },
 ];
 
+const fadeUp = {
+  initial: { opacity: 0, y: 16 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true },
+} as const;
+
 export function TrustBar() {
   return (
-    <section className="py-20 lg:py-28 relative overflow-hidden">
-      {/* Subtle divider lines */}
-      <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-border to-transparent" />
-      <div className="absolute inset-x-0 bottom-0 h-px bg-linear-to-r from-transparent via-border to-transparent" />
-
+    <section className="py-20 lg:py-28">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        {/* Company logos */}
-        <motion.div
-          className="text-center mb-16"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-        >
-          <p className="text-sm font-medium text-muted-foreground mb-8 uppercase tracking-widest">
-            Practice for interviews at top companies
+        {/* Company strip */}
+        <motion.div {...fadeUp} transition={{ duration: 0.5 }}>
+          <p className="text-center text-[13px] text-muted-foreground">
+            Practice loops modeled on interviews at
           </p>
-
-          <div className="relative">
-            {/* Fade edges */}
-            <div className="absolute left-0 top-0 bottom-0 w-20 bg-linear-to-r from-background to-transparent z-10" />
-            <div className="absolute right-0 top-0 bottom-0 w-20 bg-linear-to-l from-background to-transparent z-10" />
-
-            <div className="flex justify-center items-center gap-8 md:gap-12 lg:gap-16 flex-wrap">
-              {companies.map((company, i) => (
-                <motion.span
-                  key={company}
-                  className="text-xl lg:text-2xl font-semibold text-muted-foreground/40 hover:text-muted-foreground transition-colors duration-300 cursor-default font-heading"
-                  initial={{ opacity: 0 }}
-                  whileInView={{ opacity: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.05, duration: 0.5 }}
-                  whileHover={{ scale: 1.05 }}
-                >
-                  {company}
-                </motion.span>
-              ))}
-            </div>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-x-10 gap-y-3">
+            {companies.map((company) => (
+              <span
+                key={company}
+                className="font-heading text-base font-medium text-muted-foreground/40"
+              >
+                {company}
+              </span>
+            ))}
           </div>
         </motion.div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
+        {/* Stats — flat row, separated by hairlines */}
+        <div className="mt-16 grid gap-10 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-border/60">
           {stats.map((stat, i) => (
             <motion.div
               key={stat.label}
-              className="group relative"
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.2 + i * 0.1, duration: 0.6 }}
+              {...fadeUp}
+              transition={{ duration: 0.5, delay: 0.1 + i * 0.08 }}
+              className="sm:px-8 sm:first:pl-0 sm:last:pr-0"
             >
-              <div className="relative p-8 rounded-xl border border-zinc-200/80 bg-zinc-50/50 hover:border-zinc-300 hover:bg-zinc-100/50 dark:border-border/50 dark:bg-[#0d0d0d] dark:hover:border-border dark:hover:bg-[#101111] transition-all duration-500 overflow-hidden">
-                {/* Background gradient on hover */}
-                <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
-                <div className="relative">
-                  <div className="inline-flex p-3 rounded-lg bg-primary/10 mb-4">
-                    <stat.icon className="h-6 w-6 text-primary" />
-                  </div>
-
-                  <p className="text-4xl lg:text-5xl font-bold text-foreground mb-2 tracking-tight font-heading">
-                    {stat.value}
-                  </p>
-                  <p className="text-base font-semibold text-foreground mb-1">
-                    {stat.label}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {stat.sublabel}
-                  </p>
-                </div>
-              </div>
+              <p className="font-heading text-4xl font-medium tracking-tight tabular-nums">
+                {stat.value}
+              </p>
+              <p className="mt-3 flex items-center gap-1.5 text-sm font-medium text-foreground">
+                <stat.icon className="size-3.5 text-muted-foreground" />
+                {stat.label}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {stat.sublabel}
+              </p>
             </motion.div>
           ))}
         </div>

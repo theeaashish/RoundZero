@@ -1,140 +1,109 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { HelpCircle } from "lucide-react";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Badge } from "@/components/ui/badge";
 
 const faqs = [
   {
     question: "How does the AI interviewer work?",
     answer:
-      "Our AI analyzes your resume and the job description to generate personalized questions. During the interview, it listens to your responses in real-time, asks relevant follow-up questions, and adapts the conversation based on your answers—just like a real interviewer would.",
+      "It analyzes your resume and the job description to generate personalized questions. During the session it listens in real time, asks relevant follow-ups, and adapts the conversation based on your answers — like a real interviewer would.",
   },
   {
     question: "What types of interviews can I practice?",
     answer:
-      "RoundZero supports behavioral interviews (STAR method), technical interviews (algorithms, data structures), system design discussions, and coding challenges. You can choose the interview type that matches your preparation needs.",
+      "Behavioral (STAR method), technical (algorithms and data structures), system design, and coding challenges. Pick the type that matches what you're preparing for.",
   },
   {
     question: "How accurate is the feedback?",
     answer:
-      "Our AI is trained on thousands of real interview transcripts and scoring rubrics from top tech companies. It evaluates multiple dimensions including communication clarity, technical accuracy, problem-solving approach, and behavioral competencies. The feedback is specific, actionable, and benchmarked against industry standards.",
+      "Scoring is grounded in structured rubrics modeled on real interview loops. It evaluates communication clarity, technical accuracy, problem-solving approach, and behavioral competencies — specific, actionable, and benchmarked.",
   },
   {
     question: "Can I practice in my own language or accent?",
     answer:
-      "Yes! Our voice recognition supports multiple languages and accents. The AI focuses on the content and structure of your answers, not your accent. We support English, Spanish, French, German, and more languages are coming soon.",
+      "Voice recognition handles multiple languages and accents. The AI focuses on the content and structure of your answers, not your accent. English, Spanish, French, and German are supported today, with more coming.",
   },
   {
     question: "Is my data secure and private?",
     answer:
-      "Absolutely. All your interview sessions, resumes, and personal data are encrypted end-to-end. We never share your information with third parties or use it to train AI models for other users. You can delete your data anytime from your account settings.",
+      "Yes. Sessions, resumes, and personal data are encrypted end-to-end, never shared with third parties, and never used to train models for other users. You can delete everything from account settings at any time.",
   },
   {
     question: "How is this different from practicing with friends?",
     answer:
-      "Unlike friends, our AI provides consistent, unbiased feedback every time. It never gets tired, is available 24/7, and can simulate different interviewer personalities and difficulty levels. Plus, you get detailed analytics that friends simply can't provide.",
+      "Consistent, unbiased feedback every run — no fatigue, no scheduling, and detailed analytics a friend can't give you. Difficulty and interviewer style adjust to you.",
   },
   {
-    question: "What if I make a mistake during the practice?",
+    question: "What if I make a mistake during practice?",
     answer:
-      "That's exactly what practice is for! The AI will note mistakes in your feedback report and suggest specific improvements. You can redo the same interview as many times as you want until you're comfortable. Every session helps you improve.",
+      "That's the point. Mistakes get flagged in your report with specific fixes, and you can redo the same loop as many times as you like.",
   },
   {
     question: "Do I need any special equipment?",
     answer:
-      "Just a computer or smartphone with a microphone and internet connection. We recommend using headphones for the best audio experience, but they're not required. The platform works on all modern browsers—no app download needed.",
+      "Just a browser, a microphone, and an internet connection. Headphones are recommended for the best audio experience but aren't required — no app download needed.",
   },
 ];
 
 export function FAQ() {
   return (
-    <section className="py-24 lg:py-32 relative overflow-hidden">
-      {/* Divider */}
-      <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-border to-transparent" />
-
-      <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+    <section className="py-20 lg:py-28">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6">
+        {/* Section header */}
         <motion.div
-          className="text-center mb-16"
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+          transition={{ duration: 0.5 }}
         >
-          <Badge
-            variant="outline"
-            className="mb-6 px-4 py-2 text-sm shimmer-border"
-          >
-            <HelpCircle className="h-4 w-4 mr-2 text-primary" />
-            FAQ
-          </Badge>
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold tracking-tight mb-6">
-            Questions?
-            <span className="block mt-2 text-primary">We've got answers</span>
+          <p className="text-[13px] font-medium text-muted-foreground">FAQ</p>
+          <h2 className="mt-3 text-balance font-heading text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
+            Questions, answered
           </h2>
-          <p className="text-lg lg:text-xl text-muted-foreground">
-            Everything you need to know about RoundZero and interview
-            preparation.
-          </p>
         </motion.div>
 
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          className="mt-10"
+          initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ delay: 0.2, duration: 0.6 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
         >
-          <Accordion type="single" collapsible className="w-full space-y-4">
+          <Accordion type="single" collapsible className="w-full">
             {faqs.map((faq, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, x: -20 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.3 + i * 0.05, duration: 0.5 }}
-              >
-                <AccordionItem
-                  value={`item-${i}`}
-                  className="border border-zinc-200/80 rounded-xl px-6 bg-zinc-50/50 hover:bg-zinc-100 hover:border-zinc-300 dark:border-border/50 dark:bg-[#0d0d0d] dark:hover:bg-[#101111] transition-all duration-300 data-[state=open]:border-primary/30 data-[state=open]:bg-zinc-100/50 dark:data-[state=open]:bg-[#101111]"
-                >
-                  <AccordionTrigger className="text-left hover:no-underline py-6">
-                    <span className="text-lg font-semibold pr-4">
-                      {faq.question}
-                    </span>
-                  </AccordionTrigger>
-                  <AccordionContent className="text-muted-foreground leading-relaxed pb-6">
-                    {faq.answer}
-                  </AccordionContent>
-                </AccordionItem>
-              </motion.div>
+              <AccordionItem key={i} value={`item-${i}`} className="border-border/60">
+                <AccordionTrigger className="py-4 text-left text-[15px] font-medium hover:no-underline">
+                  {faq.question}
+                </AccordionTrigger>
+                <AccordionContent className="pb-4 text-sm leading-relaxed text-muted-foreground">
+                  {faq.answer}
+                </AccordionContent>
+              </AccordionItem>
             ))}
           </Accordion>
         </motion.div>
 
-        {/* Bottom CTA */}
-        <motion.div
-          className="mt-16 text-center"
+        <motion.p
+          className="mt-12 text-sm text-muted-foreground"
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
-          transition={{ delay: 0.8, duration: 0.5 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
         >
-          <p className="text-muted-foreground mb-4">
-            Still have questions? We're here to help.
-          </p>
+          Still have questions?{" "}
           <a
             href="mailto:support@roundzero.ai"
-            className="text-primary font-semibold hover:underline underline-offset-4"
+            className="font-medium text-foreground underline-offset-4 hover:underline"
           >
-            Contact our support team →
+            Contact support
           </a>
-        </motion.div>
+        </motion.p>
       </div>
     </section>
   );

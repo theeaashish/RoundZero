@@ -1,65 +1,57 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Headphones, Pause, Play, Volume2 } from "lucide-react";
+import { Headphones, Pause, Play } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Badge } from "@/components/ui/badge";
 
 const samples = [
   {
     id: "behavioral",
-    title: "Behavioral Round",
+    title: "Behavioral round",
     desc: "Conflict resolution & leadership",
     duration: "2:34",
-    gradient: "from-blue-500 to-cyan-500",
-    bgGradient: "from-blue-500/10 to-cyan-500/10",
   },
   {
     id: "technical",
-    title: "Technical Deep-dive",
+    title: "Technical deep-dive",
     desc: "System design discussion",
     duration: "3:12",
-    gradient: "from-violet-500 to-purple-500",
-    bgGradient: "from-violet-500/10 to-purple-500/10",
   },
   {
     id: "feedback",
-    title: "AI Feedback",
-    desc: "Detailed performance review",
+    title: "Feedback review",
+    desc: "Scorecard walkthrough",
     duration: "1:45",
-    gradient: "from-orange-500 to-red-500",
-    bgGradient: "from-orange-500/10 to-red-500/10",
   },
 ];
 
-function AudioWaveform({
-  isPlaying,
-  gradient,
-}: {
-  isPlaying: boolean;
-  gradient: string;
-}) {
-  const [bars, setBars] = useState<number[]>(() => Array(24).fill(4));
+function AudioWaveform({ isPlaying }: { isPlaying: boolean }) {
+  const [bars, setBars] = useState<number[]>(() => Array(28).fill(4));
 
   useEffect(() => {
     if (!isPlaying) {
-      setBars(Array(24).fill(4));
+      setBars(Array(28).fill(4));
       return;
     }
 
     const interval = setInterval(() => {
-      setBars((prev) => prev.map(() => Math.random() * 28 + 4));
+      setBars((prev) => prev.map(() => Math.random() * 20 + 4));
     }, 100);
 
     return () => clearInterval(interval);
   }, [isPlaying]);
 
   return (
-    <div className="flex items-center justify-center gap-[2px] h-12">
+    <div
+      aria-hidden="true"
+      className="flex h-6 items-center justify-end gap-[2px]"
+    >
       {bars.map((height, i) => (
-        <motion.div
+        <motion.span
           key={i}
-          className={`w-1 rounded-full ${isPlaying ? `bg-primary` : "bg-muted-foreground/20"}`}
+          className={`w-[2px] rounded-full ${
+            isPlaying ? "bg-foreground/60" : "bg-border"
+          }`}
           animate={{ height: isPlaying ? height : 4 }}
           transition={{ duration: 0.1, ease: "easeOut" }}
         />
@@ -72,109 +64,88 @@ export function AudioSamples() {
   const [playing, setPlaying] = useState<string | null>(null);
 
   const togglePlay = (id: string) => {
-    if (playing === id) {
-      setPlaying(null);
-    } else {
-      setPlaying(id);
-      setTimeout(() => setPlaying(null), 5000);
-    }
+    setPlaying((current) => (current === id ? null : id));
   };
 
-  return (
-    <section id="demo" className="py-24 lg:py-32 relative overflow-hidden">
-      {/* Divider */}
-      <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-border to-transparent" />
+  /* Demo playback auto-stops after a few seconds */
+  useEffect(() => {
+    if (!playing) return;
+    const timeout = setTimeout(() => setPlaying(null), 5000);
+    return () => clearTimeout(timeout);
+  }, [playing]);
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  return (
+    <section id="demo" className="py-20 lg:py-28">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+        {/* Section header */}
         <motion.div
-          className="text-center max-w-3xl mx-auto mb-16"
-          initial={{ opacity: 0, y: 20 }}
+          className="max-w-2xl"
+          initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+          transition={{ duration: 0.5 }}
         >
-          <Badge
-            variant="outline"
-            className="mb-6 px-4 py-2 text-sm shimmer-border"
-          >
-            <Headphones className="h-4 w-4 mr-2 text-primary" />
+          <p className="text-[13px] font-medium text-muted-foreground">
             Audio samples
-          </Badge>
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold tracking-tight mb-6">
-            Hear the
-            <span className="ml-2 mt-2 text-primary">difference</span>
+          </p>
+          <h2 className="mt-3 flex items-center gap-2 text-balance font-heading text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
+            Hear a session
+            <Headphones className="size-5 text-muted-foreground" />
           </h2>
-          <p className="text-lg lg:text-xl text-muted-foreground">
-            Listen to real interview sessions and experience how our AI adapts
-            to different scenarios.
+          <p className="mt-4 text-pretty text-base leading-relaxed text-muted-foreground">
+            Short clips from real practice loops — the interviewer, a deep-dive,
+            and the feedback that follows.
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 max-w-5xl mx-auto">
-          {samples.map((sample, i) => (
-            <motion.div
-              key={sample.id}
-              className="group relative"
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1, duration: 0.6 }}
-            >
-              <div className="relative rounded-xl border border-zinc-200 bg-card/30 backdrop-blur-sm p-8 hover:border-zinc-300 hover:bg-card/50 dark:border-border/50 dark:hover:border-border transition-all duration-500 text-center overflow-hidden shimmer-border">
-                {/* Background gradient */}
-                <div
-                  className={`absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500`}
-                />
+        {/* Sample rows */}
+        <motion.div
+          className="mt-12 divide-y divide-border overflow-hidden rounded-xl border border-border bg-background"
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+        >
+          {samples.map((sample) => {
+            const isPlaying = playing === sample.id;
+            return (
+              <div
+                key={sample.id}
+                className="flex items-center gap-4 px-4 py-4 transition-colors hover:bg-muted/20 sm:px-5"
+              >
+                <button
+                  type="button"
+                  onClick={() => togglePlay(sample.id)}
+                  aria-label={isPlaying ? `Pause ${sample.title}` : `Play ${sample.title}`}
+                  className={`flex size-10 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                    isPlaying
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border bg-background text-foreground hover:bg-muted"
+                  }`}
+                >
+                  {isPlaying ? (
+                    <Pause className="size-3.5" />
+                  ) : (
+                    <Play className="ml-0.5 size-3.5" />
+                  )}
+                </button>
 
-                <div className="relative">
-                  {/* Play button */}
-                  <button
-                    onClick={() => togglePlay(sample.id)}
-                    className={`relative h-20 w-20 rounded-full mx-auto mb-6 flex items-center justify-center transition-all duration-500 ${
-                      playing === sample.id
-                        ? `bg-primary shadow-2xl scale-110`
-                        : `bg-primary/90 shadow-xl hover:scale-105 hover:shadow-2xl`
-                    }`}
-                  >
-                    {playing === sample.id ? (
-                      <Pause className="h-8 w-8 text-white" />
-                    ) : (
-                      <Play className="h-8 w-8 text-white ml-1" />
-                    )}
-
-                    {/* Pulse rings when playing */}
-                    {playing === sample.id && (
-                      <>
-                        <span
-                          className={`absolute inset-0 rounded-full bg-primary animate-ping opacity-20`}
-                        />
-                        <span
-                          className={`absolute -inset-2 rounded-full border-2 border-current opacity-20 animate-pulse`}
-                          style={{ borderColor: "inherit" }}
-                        />
-                      </>
-                    )}
-                  </button>
-
-                  <h3 className="text-xl font-semibold mb-2">{sample.title}</h3>
-                  <p className="text-sm text-muted-foreground mb-6">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{sample.title}</p>
+                  <p className="truncate text-xs text-muted-foreground">
                     {sample.desc}
                   </p>
-
-                  {/* Waveform */}
-                  <AudioWaveform
-                    isPlaying={playing === sample.id}
-                    gradient={sample.gradient}
-                  />
-
-                  <p className="text-xs text-muted-foreground mt-4 font-mono">
-                    {sample.duration}
-                  </p>
                 </div>
+
+                <AudioWaveform isPlaying={isPlaying} />
+
+                <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                  {sample.duration}
+                </span>
               </div>
-            </motion.div>
-          ))}
-        </div>
+            );
+          })}
+        </motion.div>
       </div>
     </section>
   );
