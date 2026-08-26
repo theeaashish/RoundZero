@@ -20,8 +20,8 @@ export default async function SystemDesignHubPage() {
     redirect("/sign-in?error=session");
   }
 
-  // Fetch problems on server
-  const problems = await serverClient.practice.getProblems({});
+  // Fetch initial page of problems on server
+  const problemsData = await serverClient.practice.getProblems({ limit: 12 });
 
   return (
     <div className="flex flex-col gap-8 p-8 w-full animate-in fade-in duration-500">
@@ -45,7 +45,7 @@ export default async function SystemDesignHubPage() {
         )}
       </div>
 
-      <ProblemList initialData={problems} />
+      <ProblemList initialData={problemsData} />
     </div>
   );
 }

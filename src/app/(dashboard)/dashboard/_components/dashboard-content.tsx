@@ -95,7 +95,7 @@ export default function DashboardContent({ user }: DashboardContentProps) {
 
   const { data: practiceData, isLoading: isPracticeLoading } = useQuery(
     orpc.practice.getProblems.queryOptions({
-      input: {},
+      input: { limit: 3 },
       staleTime: 1000 * 60 * 5,
     }),
   );
@@ -125,7 +125,7 @@ export default function DashboardContent({ user }: DashboardContentProps) {
 
   const recommendedPracticeItems = useMemo(
     () =>
-      (practiceData ?? []).slice(0, 3).map((problem) => ({
+      (practiceData?.problems ?? []).slice(0, 3).map((problem) => ({
         id: problem.id,
         title: problem.title,
         category: labelize(problem.domain),

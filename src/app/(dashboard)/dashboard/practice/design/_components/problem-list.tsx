@@ -1,7 +1,7 @@
 "use client";
 
 import type { InferRouterOutputs } from "@orpc/server";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { Loader2, Search, Server, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -16,10 +16,14 @@ import { SystemDesignCard } from "./system-design-card";
 const COMPLEXITY_OPTIONS = ["ALL", "EASY", "MEDIUM", "HARD"] as const;
 type Complexity = (typeof COMPLEXITY_OPTIONS)[number];
 
-type Problem = InferRouterOutputs<AppRouter>["practice"]["getProblems"][number];
+const ITEMS_PER_PAGE = 12;
+
+type ProblemsResponse =
+  InferRouterOutputs<AppRouter>["practice"]["getProblems"];
+type Problem = ProblemsResponse["problems"][number];
 
 interface ProblemListProps {
-  initialData: Problem[];
+  initialData: ProblemsResponse;
 }
 
 export function ProblemList({ initialData }: ProblemListProps) {
@@ -27,14 +31,18 @@ export function ProblemList({ initialData }: ProblemListProps) {
   const [complexity, setComplexity] = useState<Complexity>("ALL");
   const debouncedSearch = useDebounce(search, 400);
 
-  // Memoize query options to prevent unnecessary re-renders (project pattern)
+  // Memoize infinite query options for cursor pagination
   const options = useMemo(
     () =>
-      orpc.practice.getProblems.queryOptions({
-        input: {
+      orpc.practice.getProblems.infiniteOptions({
+        input: (cursor) => ({
           search: debouncedSearch || undefined,
           complexity: complexity === "ALL" ? undefined : complexity,
-        },
+          limit: ITEMS_PER_PAGE,
+          cursor: cursor ?? undefined,
+        }),
+        initialPageParam: undefined as string | undefined,
+        getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
       }),
     [debouncedSearch, complexity],
   );
@@ -42,15 +50,30 @@ export function ProblemList({ initialData }: ProblemListProps) {
   // Check if we are in the initial unfiltered state
   const isInitialState = !debouncedSearch && complexity === "ALL";
 
-  const { data: problems, isFetching } = useQuery({
+  const {
+    data,
+    isFetching,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     ...options,
-    // Only use initialData if we are in the initial stae to avoid blocking filter updates
-    initialData: isInitialState ? initialData : undefined,
+    initialData: isInitialState
+      ? {
+          pages: [initialData],
+          pageParams: [undefined],
+        }
+      : undefined,
     staleTime: 1000 * 60 * 2,
   });
 
-  // Display initialData as fallback if query results aren't ready for the initial state
-  const displayProblems = problems ?? (isInitialState ? initialData : []);
+  const problems = useMemo(
+    () =>
+      data?.pages.flatMap((page) => page.problems) ??
+      (isInitialState ? initialData.problems : []),
+    [data, isInitialState, initialData],
+  );
 
   const hasActiveFilters = search.length > 0 || complexity !== "ALL";
 
@@ -109,20 +132,42 @@ export function ProblemList({ initialData }: ProblemListProps) {
       </div>
 
       {/* ── Problem Grid ── */}
-      {isFetching && !displayProblems.length ? (
+      {isLoading && !problems.length ? (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-[280px] rounded-2xl" />
+            <Skeleton key={i} className="h-70 rounded-2xl" />
           ))}
         </div>
-      ) : displayProblems.length > 0 ? (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {displayProblems.map((problem) => (
-            <SystemDesignCard key={problem.id} problem={problem} />
-          ))}
+      ) : problems.length > 0 ? (
+        <div className="space-y-8">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {problems.map((problem) => (
+              <SystemDesignCard key={problem.id} problem={problem} />
+            ))}
+          </div>
+
+          {hasNextPage && (
+            <div className="flex justify-center pt-2">
+              <Button
+                variant="outline"
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="rounded-xl px-6 py-2.5 font-medium shadow-sm transition-all hover:bg-secondary"
+              >
+                {isFetchingNextPage ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Loading challenges...
+                  </>
+                ) : (
+                  "Load More Challenges"
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center min-h-[400px] gap-5 text-center rounded-2xl border border-dashed border-border/50 p-12 bg-muted/10">
+        <div className="flex flex-col items-center justify-center min-h-100 gap-5 text-center rounded-2xl border border-dashed border-border/50 p-12 bg-muted/10">
           <div className="p-5 rounded-full bg-muted/30">
             <Server className="h-8 w-8 text-muted-foreground/50" />
           </div>

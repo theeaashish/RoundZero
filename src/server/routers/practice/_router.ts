@@ -8,25 +8,20 @@ import {
 import { generateProblem, generateProblemInput } from "./generate-problem";
 import { getAttempt, getAttemptInput } from "./get-attempt";
 import { getProblem } from "./get-problem";
-import { getProblems } from "./get-problems";
+import { getProblems, getProblemsInputSchema } from "./get-problems";
 import { listAttempts, listAttemptsInput } from "./list-attempts";
 import { submitAttempt, submitAttemptInput } from "./submit-attempt";
 
 export const practiceRouter = {
   getProblems: protectedProcedure
     .route({
-      description: "Get all system design problems",
+      description: "Get paginated system design problems with cursor pagination",
       method: "GET",
       path: "/practice/design/problems",
       summary: "Get Problems",
       tags: ["Practice"],
     })
-    .input(
-      z.object({
-        search: z.string().optional(),
-        complexity: z.string().optional(),
-      }),
-    )
+    .input(getProblemsInputSchema)
     .handler(getProblems),
 
   generateProblem: adminProcedure
