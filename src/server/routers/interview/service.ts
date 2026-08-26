@@ -299,10 +299,24 @@ export const mergeInterviewHistory = (
   history: InterviewMessageRecord[],
   nextMessage: InterviewMessageRecord,
 ): InterviewMessageRecord[] => {
-  const messageById = new Map(history.map((message) => [message.id, message]));
-  messageById.set(nextMessage.id, nextMessage);
+  const existingIndex = history.findIndex(
+    (message) => message.id === nextMessage.id,
+  );
+  if (existingIndex !== -1) {
+    const updated = [...history];
+    updated[existingIndex] = nextMessage;
+    return updated;
+  }
 
-  return Array.from(messageById.values()).sort(
+  if (
+    history.length === 0 ||
+    history[history.length - 1].createdAt.getTime() <=
+      nextMessage.createdAt.getTime()
+  ) {
+    return [...history, nextMessage];
+  }
+
+  return [...history, nextMessage].sort(
     (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
   );
 };
@@ -523,14 +537,29 @@ export class SentenceChunker {
     return null;
   }
 
+  private countWords(str: string): number {
+    let count = 0;
+    let inWord = false;
+    for (let i = 0; i < str.length; i++) {
+      if (str.charCodeAt(i) > 32) {
+        if (!inWord) {
+          inWord = true;
+          count++;
+        }
+      } else {
+        inWord = false;
+      }
+    }
+    return count;
+  }
+
   private findBoundary(
     text: string,
     isFirstChunk: boolean,
   ): { index: number } | null {
     const trimmed = text.trim();
     if (!trimmed) return null;
-    const words = trimmed.split(/\s+/);
-    const wordCount = words.length;
+    const wordCount = this.countWords(trimmed);
 
     // Sentence terminator (.?! or double newline) not preceded by common abbreviations
     const sentenceRegex =

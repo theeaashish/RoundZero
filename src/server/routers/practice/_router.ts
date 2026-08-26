@@ -15,7 +15,8 @@ import { submitAttempt, submitAttemptInput } from "./submit-attempt";
 export const practiceRouter = {
   getProblems: protectedProcedure
     .route({
-      description: "Get paginated system design problems with cursor pagination",
+      description:
+        "Get paginated system design problems with cursor pagination",
       method: "GET",
       path: "/practice/design/problems",
       summary: "Get Problems",

@@ -1,6 +1,9 @@
 import type { z } from "zod";
-
-import { getCurrentPlanStateForUser } from "@/lib/billing/subscription";
+import {
+  getPlanConfig,
+  getPlanIdFromSubscriptionPlan,
+} from "@/lib/billing/plan";
+import { getActiveSubscriptionForUser } from "@/lib/billing/subscription";
 import db from "@/lib/prisma";
 import type { Context } from "@/server/orpc";
 import { calculateHeatmap } from "./calculations/heatmap";
@@ -33,7 +36,6 @@ export async function getData({
 
   const { period } = input;
   const { startDate, endDate } = getDateRange(period);
-  const planState = await getCurrentPlanStateForUser(user.id);
 
   // Calculate previous period dates for comparison
   const periodLength = endDate.getTime() - startDate.getTime();
@@ -43,73 +45,80 @@ export async function getData({
   // Heatmap needs last 84 days (12 weeks)
   const heatmapStartDate = new Date(Date.now() - 84 * 24 * 60 * 60 * 1000);
 
-  // Execute all queries in parallel for efficiency
-  const [currentInterviews, previousInterviews, heatmapInterviews] =
-    await Promise.all([
-      // Current period interviews with only needed report fields
-      db.interview.findMany({
-        where: {
-          userId: user.id,
-          startedAt: { gte: startDate, lte: endDate },
-        },
-        select: {
-          id: true,
-          status: true,
-          type: true,
-          startedAt: true,
-          durationSec: true,
-          report: {
-            select: {
-              overallScore: true,
-              categoryScores: true,
-              strengths: true,
-              weaknesses: true,
-              suggestions: true,
-            },
+  // Execute all queries in parallel for maximum database concurrency
+  const [
+    currentInterviews,
+    previousInterviews,
+    heatmapInterviews,
+    subscription,
+  ] = await Promise.all([
+    // Current period interviews with only needed report fields
+    db.interview.findMany({
+      where: {
+        userId: user.id,
+        startedAt: { gte: startDate, lte: endDate },
+      },
+      select: {
+        id: true,
+        status: true,
+        type: true,
+        startedAt: true,
+        durationSec: true,
+        report: {
+          select: {
+            overallScore: true,
+            categoryScores: true,
+            strengths: true,
+            weaknesses: true,
+            suggestions: true,
           },
         },
-        orderBy: { startedAt: "asc" },
-      }),
+      },
+      orderBy: { startedAt: "asc" },
+    }),
 
-      // Previous period for comparison - only fetch needed fields
-      db.interview.findMany({
-        where: {
-          userId: user.id,
-          startedAt: { gte: previousStartDate, lte: previousEndDate },
-        },
-        select: {
-          id: true,
-          status: true,
-          type: true,
-          startedAt: true,
-          durationSec: true,
-          report: {
-            select: {
-              overallScore: true,
-              categoryScores: true,
-            },
+    // Previous period for comparison - only fetch needed fields
+    db.interview.findMany({
+      where: {
+        userId: user.id,
+        startedAt: { gte: previousStartDate, lte: previousEndDate },
+      },
+      select: {
+        id: true,
+        status: true,
+        type: true,
+        startedAt: true,
+        durationSec: true,
+        report: {
+          select: {
+            overallScore: true,
+            categoryScores: true,
           },
         },
-      }),
+      },
+    }),
 
-      // All interviews for heatmap (last 84 days) - minimal fields
-      db.interview.findMany({
-        where: {
-          userId: user.id,
-          startedAt: { gte: heatmapStartDate },
-        },
-        select: {
-          id: true,
-          startedAt: true,
-          report: {
-            select: {
-              overallScore: true,
-            },
+    // All interviews for heatmap (last 84 days) - minimal fields
+    db.interview.findMany({
+      where: {
+        userId: user.id,
+        startedAt: { gte: heatmapStartDate },
+      },
+      select: {
+        id: true,
+        startedAt: true,
+        report: {
+          select: {
+            overallScore: true,
           },
         },
-        orderBy: { startedAt: "asc" },
-      }),
-    ]);
+      },
+      orderBy: { startedAt: "asc" },
+    }),
+
+    // Active subscription query (in parallel)
+    getActiveSubscriptionForUser(user.id),
+  ]);
 
   // Calculate all chart data
   const overview = calculateOverview(
@@ -136,6 +145,11 @@ export async function getData({
     currentInterviews as InterviewWithReport[],
   );
 
+  const planId = subscription
+    ? getPlanIdFromSubscriptionPlan(subscription.plan)
+    : "free";
+  const plan = getPlanConfig(planId);
+
   return {
     overview,
     scoreTrend,
@@ -144,6 +158,6 @@ export async function getData({
     timeByWeek,
     activityHeatmap,
     insights,
-    canExport: planState.plan.featureFlags.canExportAnalytics,
+    canExport: plan.featureFlags.canExportAnalytics,
   };
 }

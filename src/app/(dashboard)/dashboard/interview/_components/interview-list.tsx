@@ -87,16 +87,19 @@ export function InterviewList({ initialData }: InterviewListProps) {
       return [...visible].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
     }
 
-    return [...visible].sort(
-      (a, b) =>
-        new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
-    );
+    return [...visible].sort((a, b) => {
+      const aVal =
+        a.startedAt instanceof Date ? a.startedAt.getTime() : a.startedAt;
+      const bVal =
+        b.startedAt instanceof Date ? b.startedAt.getTime() : b.startedAt;
+      return bVal > aVal ? 1 : bVal < aVal ? -1 : 0;
+    });
   }, [interviews, search, sortBy]);
 
   // Error UI
   if (error) {
     return (
-      <div className="flex h-[400px] flex-col items-center justify-center gap-4 text-center rounded-xl border border-dashed p-8 bg-muted/30">
+      <div className="flex h-100 flex-col items-center justify-center gap-4 text-center rounded-xl border border-dashed p-8 bg-muted/30">
         <div className="p-4 rounded-full bg-red-500/10">
           <Terminal className="h-8 w-8 text-red-500" />
         </div>
