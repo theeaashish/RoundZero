@@ -163,7 +163,6 @@ export async function POST(request: Request) {
       where: {
         id: interview.id,
         status: INTERVIEW_STATUS.IN_PROGRESS,
-        activeTurnId: null,
       },
       data: { activeTurnId: input.turnId },
     });
@@ -171,8 +170,7 @@ export async function POST(request: Request) {
     if (activeInterview.count === 0) {
       return Response.json(
         {
-          error:
-            "A response is already in progress. Please wait for it to finish.",
+          error: "Interview is no longer in progress",
         },
         { status: 409 },
       );

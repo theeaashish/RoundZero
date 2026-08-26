@@ -1,7 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight, Github, Linkedin, Mail, Target, Twitter } from "lucide-react";
+import {
+  ArrowRight,
+  Github,
+  Linkedin,
+  Mail,
+  Target,
+  Twitter,
+} from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -105,10 +112,7 @@ export function Footer() {
           <div className="grid grid-cols-2 gap-10 md:grid-cols-6 lg:gap-12">
             {/* Brand + newsletter */}
             <div className="col-span-2">
-              <Link
-                href="/"
-                className="flex items-center gap-2.5"
-              >
+              <Link href="/" className="flex items-center gap-2.5">
                 <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                   <Target className="size-4 stroke-[2.25]" />
                 </span>

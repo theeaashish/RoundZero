@@ -3,8 +3,8 @@
 import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { ProductPreview } from "./product-preview";
 import { buttonVariants } from "@/components/ui/button";
+import { ProductPreview } from "./product-preview";
 
 /* Same cubic-bezier used by the CTA arrow hover — keeps the section
    feeling like one motion system. */

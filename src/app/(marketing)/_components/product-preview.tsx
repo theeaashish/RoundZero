@@ -73,8 +73,8 @@ export function ProductPreview() {
               changed?
             </h3>
             <p className="mt-4 max-w-lg text-[13px] leading-relaxed text-muted-foreground">
-              Follow-up on your Redis TTL. The interviewer wants the invalidation
-              path, not another latency number.
+              Follow-up on your Redis TTL. The interviewer wants the
+              invalidation path, not another latency number.
             </p>
 
             <div className="mt-auto hidden pt-10 sm:block">

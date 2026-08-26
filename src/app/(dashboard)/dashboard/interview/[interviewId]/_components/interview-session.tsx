@@ -1,15 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Code2, MessageSquare } from "lucide-react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useInterview } from "../_context/interview-context";
-import type { Message } from "./chat-message";
+import { useChatViewMessages } from "../_hooks/use-chat-view-messages";
+import { formatDuration, useSessionTimer } from "../_hooks/use-session-timer";
 import { CodeEditor } from "./code-editor";
-import { ControlBar } from "./control-bar";
 import { InterviewChat } from "./interview-chat";
-import { InterviewHeader } from "./interview-header";
-import { InterviewStats } from "./interview-stats";
-import { VideoFeed } from "./video-feed";
+import { SessionControls } from "./session-controls";
+import { ConnectionNotice, SessionTopBar } from "./session-top-bar";
+
+type Pane = "chat" | "code";
 
 export function InterviewSession() {
   const {
@@ -32,11 +38,12 @@ export function InterviewSession() {
     connectSTT,
   } = useInterview();
 
-  const [isChatOpen, setIsChatOpen] = useState(false);
   const [isEditorExpanded, setIsEditorExpanded] = useState(false);
-  const [elapsedTime, setElapsedTime] = useState(0);
   const [showMicReminder, setShowMicReminder] = useState(false);
-  const messageCacheRef = useRef<Map<string, Message>>(new Map());
+  const [pane, setPane] = useState<Pane>("chat");
+
+  const elapsedTime = useSessionTimer(interview, status === "IN_PROGRESS");
+  const chatMessages = useChatViewMessages(messages);
 
   // Auto-start interview if in SETUP
   useEffect(() => {
@@ -44,25 +51,6 @@ export function InterviewSession() {
       startInterview();
     }
   }, [isHydrated, status, startInterview, isLoading, interview]);
-
-  useEffect(() => {
-    if (!interview) {
-      return;
-    }
-
-    setElapsedTime(interview.durationSec);
-  }, [interview]);
-
-  // Timer
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (status === "IN_PROGRESS") {
-      interval = setInterval(() => {
-        setElapsedTime((prev) => prev + 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [status]);
 
   // Show mic reminder after AI finishes speaking and user hasn't started recording
   useEffect(() => {
@@ -101,58 +89,43 @@ export function InterviewSession() {
     }
   }, [isRecording]);
 
-  // Preserve referential identity for unchanging past messages so React skips reconciliation
-  const chatMessages = useMemo(() => {
-    const cache = messageCacheRef.current;
-    const nextMap = new Map<string, Message>();
-
-    return messages.map((message) => {
-      const formattedTimestamp = message.createdAt
-        ? new Date(message.createdAt).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          })
-        : "";
-      const isTyping = message.isTyping ?? false;
-
-      const cached = cache.get(message.id);
-      if (
-        cached &&
-        cached.content === message.content &&
-        cached.isTyping === isTyping &&
-        cached.codeSnippet === message.codeSnippet &&
-        cached.language === message.language &&
-        cached.role === message.role &&
-        cached.timestamp === formattedTimestamp
-      ) {
-        nextMap.set(message.id, cached);
-        return cached;
-      }
-
-      const nextObj: Message = {
-        id: message.id,
-        role: message.role,
-        content: message.content,
-        codeSnippet: message.codeSnippet,
-        language: message.language,
-        timestamp: formattedTimestamp,
-        isTyping,
-      };
-      nextMap.set(message.id, nextObj);
-      return nextObj;
-    });
-  }, [messages]);
-
+  // Spacebar hotkey to toggle mic hands-free (when not typing in an editor/input)
   useEffect(() => {
-    messageCacheRef.current = new Map(chatMessages.map((m) => [m.id, m]));
-  }, [chatMessages]);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat) return;
+
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+
+      const tagName = target.tagName.toLowerCase();
+      const isEditable =
+        tagName === "input" ||
+        tagName === "textarea" ||
+        target.isContentEditable ||
+        Boolean(target.closest(".monaco-editor"));
+
+      if (isEditable) return;
+
+      e.preventDefault();
+      void toggleMic();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [toggleMic]);
 
   const handleCodeSubmit = useCallback(
     async (code: string, language: string) => {
-      await sendMessage("Shared a code submission for review.", {
-        codeSnippet: code,
-        language,
-      });
+      const success = await sendMessage(
+        "Shared a code submission for review.",
+        {
+          codeSnippet: code,
+          language,
+        },
+      );
+      if (!success) {
+        throw new Error("Failed to submit code. Please try again.");
+      }
     },
     [sendMessage],
   );
@@ -161,37 +134,38 @@ export function InterviewSession() {
     endInterview(elapsedTime);
   }, [endInterview, elapsedTime]);
 
-  const handleToggleChat = useCallback(() => {
-    setIsChatOpen((prev) => !prev);
-  }, []);
-
   const handleToggleExpand = useCallback(() => {
     setIsEditorExpanded((prev) => !prev);
   }, []);
 
+  const handleReconnect = useCallback(() => {
+    void connectSTT();
+  }, [connectSTT]);
+
   const techStackArray = useMemo(
-    () => (interview?.techStack ? interview.techStack.split(",") : []),
+    () =>
+      interview?.techStack
+        ? interview.techStack
+            .split(",")
+            .map((entry) => entry.trim())
+            .filter(Boolean)
+        : [],
     [interview?.techStack],
   );
 
-  if (isLoading || !interview || !isHydrated) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        Loading Interview...
-      </div>
-    );
+  if (isLoading || !isHydrated) {
+    return <SessionSkeleton />;
+  }
+
+  if (!interview) {
+    return <InterviewNotFound />;
   }
 
   const isTechnical = interview.type === "TECHNICAL";
   const questionsAnswered = messages.filter(
     (message) => message.role === "user",
   ).length;
-  const targetQuestionCount =
-    interview.type === "TECHNICAL"
-      ? 5
-      : interview.type === "SYSTEM_DESIGN"
-        ? 4
-        : 4;
+  const targetQuestionCount = isTechnical ? 5 : 4;
   const currentPhase =
     questionsAnswered === 0
       ? "Opening"
@@ -201,123 +175,187 @@ export function InterviewSession() {
           ? "Deep Dive"
           : "Wrap Up";
 
-  const formatTime = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  };
+  const transcriptPanel = (
+    <InterviewChat
+      messages={chatMessages}
+      draftTranscript={transcript}
+      interimTranscript={interimTranscript}
+    />
+  );
 
   return (
-    <div className="flex flex-col h-screen bg-background overflow-hidden relative">
-      {/* Header */}
-      <InterviewHeader
-        jobTitle={interview.jobTitle}
-        interviewType={interview.type}
-        duration={formatTime(elapsedTime)}
-        status={status === "IN_PROGRESS" ? "live" : "connecting"}
-      />
-
-      {/* Stats bar */}
-      <div className="flex justify-center py-1.5 border-b bg-muted/30">
-        <InterviewStats
+    <TooltipProvider delayDuration={200}>
+      <div className="flex h-full flex-col overflow-hidden bg-background">
+        <SessionTopBar
+          jobTitle={interview.jobTitle}
+          interviewType={interview.type}
+          techStack={techStackArray}
+          phase={currentPhase}
           questionsAnswered={questionsAnswered}
           totalQuestions={targetQuestionCount}
-          currentTopic={interview.techStack || "General"}
-          techStack={techStackArray}
-          currentPhase={currentPhase}
+          elapsed={formatDuration(elapsedTime)}
           connectionState={connectionState}
+          isPlaying={isPlaying}
+          isResponding={isResponding}
+          isRecording={isRecording}
         />
-      </div>
 
-      {/* Main content */}
-      <div className="flex-1 flex min-h-0 overflow-hidden relative">
+        <ConnectionNotice
+          connectionState={connectionState}
+          onReconnect={handleReconnect}
+        />
+
         {isTechnical ? (
           <>
-            {/* Left side - Chat Interface */}
-            <div
-              className={cn(
-                "flex flex-col h-full overflow-hidden transition-all duration-300 border-r border-border/40 relative",
-                isEditorExpanded ? "w-[40%]" : "w-1/2",
-              )}
-            >
-              <InterviewChat
-                messages={chatMessages}
-                isRecording={isRecording}
-                isPlaying={isPlaying}
-                isResponding={isResponding}
-                onToggleMic={toggleMic}
-                showMicReminder={showMicReminder}
-                draftTranscript={transcript}
-                interimTranscript={interimTranscript}
-                connectionState={connectionState}
-                onReconnect={() => connectSTT()}
-                className="h-full w-full"
+            {/* Below lg there isn't room for both panels side by side, so they
+                share the viewport. Both stay mounted — switching panes must not
+                discard the editor's contents. */}
+            <div className="flex shrink-0 items-center gap-1 border-b border-border/60 bg-card/40 px-4 py-2 lg:hidden">
+              <PaneTab
+                icon={MessageSquare}
+                label="Conversation"
+                isActive={pane === "chat"}
+                onClick={() => setPane("chat")}
               />
+              <PaneTab
+                icon={Code2}
+                label="Code"
+                isActive={pane === "code"}
+                onClick={() => setPane("code")}
+              />
+            </div>
 
-              {/* User video floating at bottom left */}
-              <div className="absolute bottom-4 left-4 w-32 h-24 rounded-xl overflow-hidden shadow-xl border-2 border-background z-20 bg-black">
-                <VideoFeed
-                  userName="You"
-                  isVideoOn={true}
-                  isMicOn={isRecording}
-                  compact
+            <div className="flex min-h-0 flex-1 lg:flex-row">
+              <div
+                className={cn(
+                  "min-h-0 min-w-0 flex-1 flex-col transition-[width] duration-300 lg:flex lg:flex-none lg:border-r lg:border-border/60",
+                  isEditorExpanded ? "lg:w-[40%]" : "lg:w-1/2",
+                  pane === "chat" ? "flex" : "hidden",
+                )}
+              >
+                {transcriptPanel}
+              </div>
+
+              <div
+                className={cn(
+                  "min-h-0 min-w-0 flex-1 flex-col transition-[width] duration-300 lg:flex lg:flex-none",
+                  isEditorExpanded ? "lg:w-[60%]" : "lg:w-1/2",
+                  pane === "code" ? "flex" : "hidden",
+                )}
+              >
+                <CodeEditor
+                  className="h-full rounded-none border-0"
+                  isExpanded={isEditorExpanded}
+                  onToggleExpand={handleToggleExpand}
+                  onSubmit={handleCodeSubmit}
+                  disabled={
+                    status !== "IN_PROGRESS" || isResponding || isEnding
+                  }
                 />
               </div>
             </div>
-
-            {/* Right side - Code Editor */}
-            <div
-              className={cn(
-                "flex flex-col h-full overflow-hidden transition-all duration-300 bg-[#1e1e1e]",
-                isEditorExpanded ? "w-[60%]" : "w-1/2",
-              )}
-            >
-              <CodeEditor
-                className="h-full border-0 rounded-none"
-                isExpanded={isEditorExpanded}
-                onToggleExpand={handleToggleExpand}
-                onSubmit={handleCodeSubmit}
-              />
-            </div>
           </>
         ) : (
-          // Behavioral Layout - Full Chat Interface
-          <div className="flex-1 flex flex-col relative h-full">
-            <InterviewChat
-              messages={chatMessages}
-              isRecording={isRecording}
-              isPlaying={isPlaying}
-              isResponding={isResponding}
-              onToggleMic={toggleMic}
-              showMicReminder={showMicReminder}
-              draftTranscript={transcript}
-              interimTranscript={interimTranscript}
-              connectionState={connectionState}
-              onReconnect={() => connectSTT()}
-              className="h-full"
-            />
-
-            {/* User video floating at bottom right */}
-            <div className="absolute bottom-6 right-6 w-48 h-36 rounded-2xl overflow-hidden shadow-2xl border-2 border-background bg-black z-20">
-              <VideoFeed
-                userName="You"
-                isVideoOn={true}
-                isMicOn={isRecording}
-                compact
-              />
-            </div>
-          </div>
+          <div className="flex min-h-0 flex-1 flex-col">{transcriptPanel}</div>
         )}
+
+        <SessionControls
+          isMicOn={isRecording}
+          onToggleMic={toggleMic}
+          onEndInterview={handleEndInterview}
+          isEnding={isEnding}
+          showMicReminder={showMicReminder && !isRecording}
+        />
+      </div>
+    </TooltipProvider>
+  );
+}
+
+function PaneTab({
+  icon: Icon,
+  label,
+  isActive,
+  onClick,
+}: {
+  icon: typeof MessageSquare;
+  label: string;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={isActive}
+      className={cn(
+        "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        isActive
+          ? "bg-muted text-foreground"
+          : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      <Icon className="size-3.5" />
+      {label}
+    </button>
+  );
+}
+
+const SKELETON_TURNS = ["a", "b", "c"];
+
+function SessionSkeleton() {
+  return (
+    <div className="flex h-full flex-col overflow-hidden bg-background">
+      <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border/60 px-4 md:px-6">
+        <Skeleton className="size-8 rounded-md" />
+        <div className="flex-1 space-y-1.5">
+          <Skeleton className="h-3.5 w-44" />
+          <Skeleton className="h-3 w-28" />
+        </div>
+        <Skeleton className="h-4 w-11" />
+        <Skeleton className="h-6 w-24 rounded-full" />
       </div>
 
-      <ControlBar
-        onToggleChat={handleToggleChat}
-        isChatOpen={isChatOpen}
-        isMicOn={isRecording}
-        onToggleMic={toggleMic}
-        onEndInterview={handleEndInterview}
-        isEnding={isEnding}
-      />
+      <div className="min-h-0 flex-1 px-4 py-6 md:px-6">
+        <div className="mx-auto flex max-w-3xl flex-col gap-5">
+          {SKELETON_TURNS.map((key) => (
+            <div key={key} className="space-y-5">
+              <div className="space-y-2">
+                <Skeleton className="h-2.5 w-20" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-4/5" />
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <Skeleton className="h-2.5 w-8" />
+                <Skeleton className="h-10 w-1/2 rounded-2xl" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex shrink-0 items-center justify-center gap-4 border-t border-border/60 px-4 py-4 md:px-6">
+        <Skeleton className="size-14 rounded-full" />
+        <Skeleton className="h-11 w-36 rounded-md" />
+      </div>
+    </div>
+  );
+}
+
+function InterviewNotFound() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-5 px-6 text-center">
+      <div className="space-y-1.5">
+        <h1 className="text-lg font-semibold tracking-tight">
+          Interview not found
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          This session doesn&apos;t exist, or you don&apos;t have access to it.
+        </p>
+      </div>
+      <Button asChild variant="outline">
+        <Link href="/dashboard/interview">Back to history</Link>
+      </Button>
     </div>
   );
 }

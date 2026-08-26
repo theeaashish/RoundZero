@@ -1,16 +1,17 @@
 "use client";
 
-import Editor from "@monaco-editor/react";
+import Editor, { type OnMount } from "@monaco-editor/react";
 import {
   Check,
   Copy,
   Maximize2,
   Minimize2,
-  Play,
   RotateCcw,
+  Send,
+  Terminal,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { memo, useState } from "react";
+import { memo, useCallback, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -22,7 +23,6 @@ import {
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -112,6 +112,7 @@ interface CodeEditorProps {
   isExpanded?: boolean;
   onToggleExpand?: () => void;
   onSubmit?: (code: string, language: string) => Promise<void>;
+  disabled?: boolean;
 }
 
 export const CodeEditor = memo(function CodeEditor({
@@ -119,6 +120,7 @@ export const CodeEditor = memo(function CodeEditor({
   isExpanded = false,
   onToggleExpand,
   onSubmit,
+  disabled = false,
 }: CodeEditorProps) {
   const { resolvedTheme } = useTheme();
   const [language, setLanguage] = useState("javascript");
@@ -126,6 +128,9 @@ export const CodeEditor = memo(function CodeEditor({
   const [copied, setCopied] = useState(false);
   const [output, setOutput] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const handleRunRef = useRef<() => Promise<void>>(async () => {});
+
+  const monacoTheme = resolvedTheme === "light" ? "light" : "vs-dark";
 
   const handleLanguageChange = (newLang: string) => {
     setLanguage(newLang);
@@ -143,41 +148,60 @@ export const CodeEditor = memo(function CodeEditor({
     setOutput(null);
   };
 
-  const handleRun = async () => {
+  const handleRun = useCallback(async () => {
+    if (disabled || isSubmitting) return;
+
     if (onSubmit) {
       setIsSubmitting(true);
       try {
-        setOutput("Submitting code to AI...");
+        setOutput("Submitting code to AI interviewer for review...");
         await onSubmit(code, language);
-        setOutput("Submitted successfully.");
-      } catch (_error) {
-        setOutput("Submission failed.");
+        setOutput(
+          "Code submitted successfully. AI is analyzing your approach.",
+        );
+      } catch (error) {
+        setOutput(
+          error instanceof Error
+            ? error.message
+            : "Submission failed. Please try again.",
+        );
       } finally {
         setIsSubmitting(false);
       }
     } else {
       setOutput("Running code...\n\n> Output will appear here");
     }
+  }, [code, language, onSubmit, disabled, isSubmitting]);
+
+  handleRunRef.current = handleRun;
+
+  const handleEditorMount: OnMount = (editor, monaco) => {
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+      void handleRunRef.current();
+    });
   };
 
   return (
     <div
       className={cn(
-        "flex flex-col bg-[#1e1e1e] h-full overflow-hidden border-l border-border/50 shadow-2xl",
+        "flex h-full flex-col overflow-hidden bg-background text-foreground",
         className,
       )}
     >
-      {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-2 bg-[#252526] border-b border-[#3c3c3c]">
-        {/* ... (Existing select and undo/copy) ... */}
-        <div className="flex items-center gap-3">
+      {/* Editor toolbar */}
+      <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-muted/40 px-3">
+        <div className="flex items-center gap-2">
           <Select value={language} onValueChange={handleLanguageChange}>
-            <SelectTrigger className="w-32 h-8 text-xs bg-[#3c3c3c] border-[#3c3c3c] text-white">
+            <SelectTrigger className="h-7 w-28 border-border/80 bg-background font-mono text-[11px] text-foreground">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="border-border bg-popover text-popover-foreground">
               {LANGUAGES.map((lang) => (
-                <SelectItem key={lang.value} value={lang.value}>
+                <SelectItem
+                  key={lang.value}
+                  value={lang.value}
+                  className="font-mono text-xs focus:bg-accent focus:text-accent-foreground"
+                >
                   {lang.label}
                 </SelectItem>
               ))}
@@ -186,86 +210,90 @@ export const CodeEditor = memo(function CodeEditor({
         </div>
 
         <div className="flex items-center gap-1">
-          <TooltipProvider delayDuration={0}>
-            {/* Buttons... */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-slate-400 hover:text-white hover:bg-[#3c3c3c]"
-                  onClick={handleReset}
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Reset code</TooltipContent>
-            </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 text-muted-foreground transition-transform hover:bg-muted hover:text-foreground active:scale-95"
+                onClick={handleReset}
+                aria-label="Reset code"
+              >
+                <RotateCcw className="size-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="text-xs">Reset code</TooltipContent>
+          </Tooltip>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-slate-400 hover:text-white hover:bg-[#3c3c3c]"
-                  onClick={handleCopy}
-                >
-                  {copied ? (
-                    <Check className="h-3.5 w-3.5 text-green-500" />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {copied ? "Copied!" : "Copy code"}
-              </TooltipContent>
-            </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 text-muted-foreground transition-transform hover:bg-muted hover:text-foreground active:scale-95"
+                onClick={handleCopy}
+                aria-label="Copy code"
+              >
+                {copied ? (
+                  <Check className="size-3 text-primary" />
+                ) : (
+                  <Copy className="size-3" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="text-xs">
+              {copied ? "Copied!" : "Copy code"}
+            </TooltipContent>
+          </Tooltip>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-slate-400 hover:text-white hover:bg-[#3c3c3c]"
-                  onClick={onToggleExpand}
-                >
-                  {isExpanded ? (
-                    <Minimize2 className="h-3.5 w-3.5" />
-                  ) : (
-                    <Maximize2 className="h-3.5 w-3.5" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {isExpanded ? "Minimize" : "Expand"}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hidden size-6 text-muted-foreground transition-transform hover:bg-muted hover:text-foreground active:scale-95 lg:inline-flex"
+                onClick={onToggleExpand}
+                aria-label={isExpanded ? "Collapse editor" : "Expand editor"}
+              >
+                {isExpanded ? (
+                  <Minimize2 className="size-3" />
+                ) : (
+                  <Maximize2 className="size-3" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="text-xs">
+              {isExpanded ? "Collapse editor" : "Expand editor"}
+            </TooltipContent>
+          </Tooltip>
 
           <Button
             size="sm"
-            className="h-7 ml-2 gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+            className="ml-1.5 h-7 gap-1.5 rounded-md px-2.5 text-xs font-medium transition-all active:scale-95"
             onClick={handleRun}
-            disabled={isSubmitting}
+            disabled={isSubmitting || disabled}
           >
-            <Play className="h-3 w-3" />
-            {isSubmitting ? "Sending..." : "Submit"}
+            <Send className="size-3" />
+            <span>{isSubmitting ? "Sending..." : "Submit"}</span>
+            <kbd className="ml-0.5 hidden rounded border border-primary-foreground/30 bg-primary-foreground/10 px-1 py-0.2 font-mono text-[9px] uppercase tracking-wider sm:inline-block">
+              ⌘↵
+            </kbd>
           </Button>
         </div>
       </div>
 
       {/* Editor */}
-      <div className="flex-1 min-h-0">
+      <div className="min-h-0 flex-1">
         <Editor
           height="100%"
           language={language}
           value={code}
           onChange={(value) => setCode(value || "")}
-          theme={resolvedTheme === "dark" ? "vs-dark" : "vs-dark"}
+          onMount={handleEditorMount}
+          theme={monacoTheme}
           options={{
             minimap: { enabled: false },
-            fontSize: 14,
+            fontSize: 13,
             lineNumbers: "on",
             scrollBeyondLastLine: false,
             automaticLayout: true,
@@ -282,13 +310,14 @@ export const CodeEditor = memo(function CodeEditor({
         />
       </div>
 
-      {/* Output panel */}
+      {/* Output terminal drawer */}
       {output && (
-        <div className="border-t border-[#3c3c3c] bg-[#1e1e1e]">
-          <div className="px-3 py-1.5 bg-[#252526] text-xs text-slate-400 font-medium">
-            Output
+        <div className="shrink-0 border-t border-border/60 bg-muted/30">
+          <div className="flex items-center gap-1.5 border-b border-border/40 px-3 py-1 text-[10px] font-medium tracking-wider text-muted-foreground">
+            <Terminal className="size-3" />
+            <span className="font-mono uppercase">Console Output</span>
           </div>
-          <pre className="p-3 text-xs text-slate-300 font-mono max-h-24 overflow-auto">
+          <pre className="max-h-20 overflow-auto p-2.5 font-mono text-xs text-foreground/90">
             {output}
           </pre>
         </div>

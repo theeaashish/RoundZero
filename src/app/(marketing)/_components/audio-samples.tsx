@@ -116,7 +116,9 @@ export function AudioSamples() {
                 <button
                   type="button"
                   onClick={() => togglePlay(sample.id)}
-                  aria-label={isPlaying ? `Pause ${sample.title}` : `Play ${sample.title}`}
+                  aria-label={
+                    isPlaying ? `Pause ${sample.title}` : `Play ${sample.title}`
+                  }
                   className={`flex size-10 shrink-0 items-center justify-center rounded-full border transition-colors ${
                     isPlaying
                       ? "border-foreground bg-foreground text-background"

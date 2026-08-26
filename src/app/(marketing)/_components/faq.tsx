@@ -77,7 +77,11 @@ export function FAQ() {
         >
           <Accordion type="single" collapsible className="w-full">
             {faqs.map((faq, i) => (
-              <AccordionItem key={i} value={`item-${i}`} className="border-border/60">
+              <AccordionItem
+                key={i}
+                value={`item-${i}`}
+                className="border-border/60"
+              >
                 <AccordionTrigger className="py-4 text-left text-[15px] font-medium hover:no-underline">
                   {faq.question}
                 </AccordionTrigger>

@@ -51,14 +51,14 @@ const comparisonData = [
 
 function StatusIcon({ status }: { status: boolean | string }) {
   if (status === true) {
-    return <Check className="mx-auto size-4 text-emerald-600 dark:text-emerald-400" />;
+    return (
+      <Check className="mx-auto size-4 text-emerald-600 dark:text-emerald-400" />
+    );
   }
   if (status === false) {
     return <X className="mx-auto size-4 text-muted-foreground/30" />;
   }
-  return (
-    <Minus className="mx-auto size-4 text-muted-foreground/50" />
-  );
+  return <Minus className="mx-auto size-4 text-muted-foreground/50" />;
 }
 
 export function Comparison() {

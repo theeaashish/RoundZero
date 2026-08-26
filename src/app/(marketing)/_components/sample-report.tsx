@@ -145,7 +145,8 @@ function OverviewPanel() {
             Trend · last 3 mocks
           </p>
           <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-            <TrendingUp className="size-3" />+1.5 pts since first mock
+            <TrendingUp className="size-3" />
+            +1.5 pts since first mock
           </span>
         </div>
         {/* Bars sit on a shared baseline; labels live below it */}
@@ -242,8 +243,8 @@ function SpeechPanel() {
           Delivery recommendation
         </p>
         <p className="border-l-2 border-border pl-3 text-xs leading-relaxed text-muted-foreground">
-          Your pacing is solid at 135 WPM. Watch volume modulation when
-          shifting between tasks or outlining trade-offs.
+          Your pacing is solid at 135 WPM. Watch volume modulation when shifting
+          between tasks or outlining trade-offs.
         </p>
       </div>
     </div>
@@ -376,8 +377,8 @@ export function SampleReport() {
                   </span>
                 </div>
                 <p className="text-[11px] leading-normal text-muted-foreground">
-                  "You used filler words 23 times. Try pausing instead of
-                  saying 'um'."
+                  "You used filler words 23 times. Try pausing instead of saying
+                  'um'."
                 </p>
               </motion.div>
             </div>

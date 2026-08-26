@@ -348,7 +348,6 @@ export const createUserInterviewMessageIfActive = async (input: {
       where: {
         id: input.interviewId,
         status: INTERVIEW_STATUS.IN_PROGRESS,
-        activeTurnId: null,
       },
       data: { activeTurnId: input.turnId },
     });

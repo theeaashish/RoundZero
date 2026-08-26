@@ -378,7 +378,12 @@ export const InterviewContextProvider = ({
         });
 
         if (!response.ok || !response.body) {
-          throw new Error(`HTTP error ${response.status}`);
+          const errorPayload = await response.json().catch(() => null);
+          const errorMessage =
+            typeof errorPayload?.error === "string"
+              ? errorPayload.error
+              : `HTTP error ${response.status}`;
+          throw new Error(errorMessage);
         }
 
         const reader = response.body.getReader();
@@ -506,10 +511,13 @@ export const InterviewContextProvider = ({
             activeUserTempIdRef.current = null;
           }
         }
+        setMessages((prev) => prev.filter((msg) => msg.id !== assistantTempId));
         toast.error(
           userMessagePersisted
             ? "The AI response stream failed."
-            : "Failed to send message",
+            : error instanceof Error
+              ? error.message
+              : "Failed to send message",
         );
         return false;
       } finally {

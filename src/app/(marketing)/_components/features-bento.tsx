@@ -66,8 +66,8 @@ export function FeaturesBento() {
             Everything you need to practice like it's the real thing
           </h2>
           <p className="mt-4 text-pretty text-base leading-relaxed text-muted-foreground">
-            Real-time simulation, structured analytics, and feedback you can
-            act on — in one place.
+            Real-time simulation, structured analytics, and feedback you can act
+            on — in one place.
           </p>
         </motion.div>
 
@@ -94,7 +94,9 @@ export function FeaturesBento() {
               </div>
             </div>
 
-            <div className={`${PANEL} flex flex-1 flex-col justify-center gap-3 p-4 font-mono text-[11px]`}>
+            <div
+              className={`${PANEL} flex flex-1 flex-col justify-center gap-3 p-4 font-mono text-[11px]`}
+            >
               <div className="space-y-1">
                 <p className="text-[10px] font-medium text-muted-foreground">
                   Interviewer
@@ -142,7 +144,9 @@ export function FeaturesBento() {
               </p>
             </div>
 
-            <div className={`${PANEL} flex h-12 items-center justify-center gap-1 overflow-hidden px-3`}>
+            <div
+              className={`${PANEL} flex h-12 items-center justify-center gap-1 overflow-hidden px-3`}
+            >
               {VOICE_MODE_WAVEFORM_BARS.map((bar, i) => (
                 <motion.span
                   key={i}
@@ -174,8 +178,8 @@ export function FeaturesBento() {
                 Resume-tailored questions
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                Upload your resume and target role. Questions map to your
-                actual experience.
+                Upload your resume and target role. Questions map to your actual
+                experience.
               </p>
             </div>
 
@@ -220,17 +224,34 @@ export function FeaturesBento() {
                   Performance analytics
                 </h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  Pacing, filler words, clarity, and STAR completeness —
-                  tracked across every session.
+                  Pacing, filler words, clarity, and STAR completeness — tracked
+                  across every session.
                 </p>
               </div>
             </div>
 
-            <div className={`${PANEL} flex flex-1 flex-col justify-center gap-3 p-4`}>
+            <div
+              className={`${PANEL} flex flex-1 flex-col justify-center gap-3 p-4`}
+            >
               {[
-                { label: "Pacing", value: "Optimal", width: "88%", tone: "bg-foreground" },
-                { label: 'Filler words', value: '2/min', width: "35%", tone: "bg-muted-foreground/60" },
-                { label: "STAR competency", value: "Strong", width: "92%", tone: "bg-foreground" },
+                {
+                  label: "Pacing",
+                  value: "Optimal",
+                  width: "88%",
+                  tone: "bg-foreground",
+                },
+                {
+                  label: "Filler words",
+                  value: "2/min",
+                  width: "35%",
+                  tone: "bg-muted-foreground/60",
+                },
+                {
+                  label: "STAR competency",
+                  value: "Strong",
+                  width: "92%",
+                  tone: "bg-foreground",
+                },
               ].map((row) => (
                 <div key={row.label} className="space-y-1.5">
                   <div className="flex justify-between text-[11px] tabular-nums">
@@ -269,7 +290,9 @@ export function FeaturesBento() {
               </p>
             </div>
 
-            <div className={`${PANEL} space-y-1.5 p-3 font-mono text-[10px] leading-relaxed`}>
+            <div
+              className={`${PANEL} space-y-1.5 p-3 font-mono text-[10px] leading-relaxed`}
+            >
               <div className="flex items-center gap-1.5 border-b border-border pb-2 text-muted-foreground">
                 <Terminal className="size-3" />
                 solution.ts
@@ -283,7 +306,9 @@ export function FeaturesBento() {
                 let l = <span className="text-foreground">0</span>, r =
                 arr.length - <span className="text-foreground">1</span>;
               </p>
-              <p className="pl-3 text-muted-foreground">while (l &lt;= r) {"{"}</p>
+              <p className="pl-3 text-muted-foreground">
+                while (l &lt;= r) {"{"}
+              </p>
               <p className="pl-6 text-foreground">
                 const mid = Math.floor((l + r) / 2);
               </p>
@@ -311,7 +336,9 @@ export function FeaturesBento() {
               </p>
             </div>
 
-            <div className={`${PANEL} flex items-center justify-between px-3 py-2.5`}>
+            <div
+              className={`${PANEL} flex items-center justify-between px-3 py-2.5`}
+            >
               <p className="font-mono text-[11px] text-muted-foreground">
                 Practice session
               </p>

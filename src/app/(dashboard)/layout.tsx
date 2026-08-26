@@ -25,13 +25,15 @@ export default async function DashboardLayout({
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="h-svh max-h-svh overflow-hidden">
       <AppSidebar />
-      <SidebarInset className="bg-background">
+      <SidebarInset className="bg-background min-h-0 overflow-hidden">
         <DashboardHeader />
 
         {/* Main Content */}
-        <main className="flex-1 overflow-auto">{children}</main>
+        <main className="flex-1 min-h-0 flex flex-col overflow-auto">
+          {children}
+        </main>
       </SidebarInset>
     </SidebarProvider>
   );
