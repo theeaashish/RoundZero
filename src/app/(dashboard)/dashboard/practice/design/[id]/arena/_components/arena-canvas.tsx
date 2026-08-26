@@ -25,7 +25,6 @@ import { RefreshCw, Save, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { useDebounce } from "@/hooks/use-debounce";
 import {
   type ArchitectureEvaluation,
   architectureEvaluationSchema,
@@ -201,32 +200,36 @@ function ArenaInner({ problemId }: { problemId: string }) {
     [setEdges],
   );
 
-  const serializedCanvas = useMemo(
-    () => JSON.stringify({ nodes, edges }),
-    [nodes, edges],
-  );
-  const debouncedCanvas = useDebounce(serializedCanvas, 1400);
-
+  // Autosave when diagram changes (debounced by 1400ms after user finishes interactions)
   useEffect(() => {
     if (!hydratedRef.current) return;
-    if (debouncedCanvas === lastSavedSnapshotRef.current) return;
 
-    const requestId = autoSaveRequestRef.current + 1;
-    autoSaveRequestRef.current = requestId;
+    const timer = setTimeout(async () => {
+      const currentNodes = getNodes();
+      const currentEdges = getEdges();
+      const currentSnapshot = JSON.stringify({
+        nodes: currentNodes,
+        edges: currentEdges,
+      });
 
-    const autosave = async () => {
+      if (currentSnapshot === lastSavedSnapshotRef.current) return;
+
+      const requestId = autoSaveRequestRef.current + 1;
+      autoSaveRequestRef.current = requestId;
+
       try {
         setIsAutoSaving(true);
-        const payload = architectureCanvasSchema.parse(
-          JSON.parse(debouncedCanvas),
-        );
+        const payload = architectureCanvasSchema.parse({
+          nodes: currentNodes,
+          edges: currentEdges,
+        });
         await orpcClient.practice.submitAttempt({
           problemId,
           architectureJson: payload,
         });
 
         if (autoSaveRequestRef.current === requestId) {
-          lastSavedSnapshotRef.current = debouncedCanvas;
+          lastSavedSnapshotRef.current = currentSnapshot;
           setLastSavedAt(new Date());
         }
       } catch (_error) {
@@ -238,10 +241,10 @@ function ArenaInner({ problemId }: { problemId: string }) {
           setIsAutoSaving(false);
         }
       }
-    };
+    }, 1400);
 
-    void autosave();
-  }, [debouncedCanvas, problemId]);
+    return () => clearTimeout(timer);
+  }, [getEdges, getNodes, nodes, edges, problemId]);
 
   const onConnect = (params: Connection | Edge) =>
     setEdges(
