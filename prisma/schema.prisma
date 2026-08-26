@@ -35,6 +35,7 @@ model User {
   systemDesignAttempts SystemDesignAttempt[]
   subscriptions        Subscription[]
 
+  @@index([stripeCustomerId])
   @@map("user")
 }
 
@@ -96,7 +97,7 @@ model Resume {
   interviews Interview[]
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
+  @@index([userId, updatedAt(sort: Desc)])
   @@map("resume")
 }
 
@@ -123,10 +124,10 @@ model Interview {
   messages        Message[]
   report          Report?
 
-  @@index([userId])
-  @@index([userId, status])
-  @@index([userId, type])
-  @@index([userId, startedAt])
+  @@index([userId, startedAt(sort: Desc)])
+  @@index([userId, status, startedAt(sort: Desc)])
+  @@index([userId, type, startedAt(sort: Desc)])
+  @@index([resumeId])
   @@map("interview")
 }
 
@@ -143,7 +144,7 @@ model Message {
   interview   Interview   @relation(fields: [interviewId], references: [id], onDelete: Cascade)
 
   @@unique([interviewId, turnId, role])
-  @@index([interviewId])
+  @@index([interviewId, createdAt(sort: Asc)])
   @@map("message")
 }
 
@@ -159,7 +160,6 @@ model Report {
   createdAt      DateTime  @default(now())
   interview      Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
 
-  @@index([interviewId])
   @@map("report")
 }
 
@@ -181,6 +181,9 @@ model SystemDesignProblem {
   updatedAt                DateTime              @updatedAt
   attempts                 SystemDesignAttempt[]
 
+  @@index([createdAt(sort: Desc)])
+  @@index([complexity, createdAt(sort: Desc)])
+  @@index([domain])
   @@map("system_design_problem")
 }
 
@@ -197,7 +200,8 @@ model SystemDesignAttempt {
   user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([problemId])
-  @@index([userId])
+  @@index([userId, updatedAt(sort: Desc)])
+  @@index([userId, problemId, createdAt(sort: Desc)])
   @@map("system_design_attempt")
 }
 
@@ -252,7 +256,6 @@ model Subscription {
   user User @relation(fields: [referenceId], references: [id], onDelete: Cascade)
 
   @@unique([stripeSubscriptionId])
-  @@index([referenceId])
   @@index([referenceId, status])
   @@map("subscription")
 }

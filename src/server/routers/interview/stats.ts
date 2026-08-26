@@ -2,7 +2,13 @@ import { ORPCError } from "@orpc/client";
 
 import db from "@/lib/prisma";
 import type { Context } from "@/server/orpc";
-import { INTERVIEW_STATUS } from "./schemas";
+
+interface StatsQueryResult {
+  totalSessions: number;
+  completedCount: number;
+  totalDurationSec: number;
+  averageScore: number | null;
+}
 
 export async function getStats({ context }: { context: Context }) {
   const { user } = context;
@@ -12,34 +18,35 @@ export async function getStats({ context }: { context: Context }) {
 
   const userId = user.id;
 
-  const [totalSessions, completedInterviews, totalDuration] = await Promise.all(
-    [
-      db.interview.count({ where: { userId } }),
-      db.interview.findMany({
-        where: { userId, status: INTERVIEW_STATUS.COMPLETED },
-        include: { report: { select: { overallScore: true } } },
-      }),
-      db.interview.aggregate({
-        where: { userId },
-        _sum: { durationSec: true },
-      }),
-    ],
-  );
+  const stats = await db.$queryRaw<StatsQueryResult[]>`
+    SELECT 
+      COUNT(*)::int AS "totalSessions",
+      COUNT(*) FILTER (WHERE i."status" = 'COMPLETED')::int AS "completedCount",
+      COALESCE(SUM(i."durationSec"), 0)::int AS "totalDurationSec",
+      (
+        SELECT ROUND(AVG(r."overallScore")::numeric, 1)::float
+        FROM "report" r
+        JOIN "interview" inv ON r."interviewId" = inv."id"
+        WHERE inv."userId" = ${userId} AND inv."status" = 'COMPLETED'
+      ) AS "averageScore"
+    FROM "interview" i
+    WHERE i."userId" = ${userId};
+  `;
 
-  const scores = completedInterviews
-    .map((i) => i.report?.overallScore)
-    .filter((s): s is number => s !== null && s !== undefined);
-
-  const averageScore =
-    scores.length > 0
-      ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) /
-        10
-      : null;
+  const result = stats[0] ?? {
+    totalSessions: 0,
+    completedCount: 0,
+    totalDurationSec: 0,
+    averageScore: null,
+  };
 
   return {
-    totalSessions,
-    completedCount: completedInterviews.length,
-    averageScore,
-    totalDurationSec: totalDuration._sum.durationSec ?? 0,
+    totalSessions: Number(result.totalSessions ?? 0),
+    completedCount: Number(result.completedCount ?? 0),
+    averageScore:
+      result.averageScore !== null && result.averageScore !== undefined
+        ? Number(result.averageScore)
+        : null,
+    totalDurationSec: Number(result.totalDurationSec ?? 0),
   };
 }

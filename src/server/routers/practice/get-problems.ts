@@ -33,6 +33,21 @@ export async function getProblems({
           : {},
       ],
     },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      functionalReqs: true,
+      nonFunctionalReqs: true,
+      complexity: true,
+      domain: true,
+      interviewRole: true,
+      estimatedDurationMinutes: true,
+      tags: true,
+      createdBy: true,
+      createdAt: true,
+      updatedAt: true,
+    },
     orderBy: { createdAt: "desc" },
   });
 

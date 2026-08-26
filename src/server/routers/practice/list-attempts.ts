@@ -24,7 +24,12 @@ export async function listAttempts({
     const [attempts, total] = await db.$transaction([
       db.systemDesignAttempt.findMany({
         where: { userId: user.id },
-        include: {
+        select: {
+          id: true,
+          problemId: true,
+          score: true,
+          createdAt: true,
+          updatedAt: true,
           problem: {
             select: {
               id: true,

@@ -2,7 +2,15 @@ import { ORPCError } from "@orpc/client";
 
 import db from "@/lib/prisma";
 import type { Context } from "@/server/orpc";
-import { type CategoryScores, INTERVIEW_STATUS } from "./schemas";
+
+interface SkillProgressResult {
+  communication: number | null;
+  problemSolving: number | null;
+  technicalKnowledge: number | null;
+  codeQuality: number | null;
+  timeManagement: number | null;
+  count: number;
+}
 
 export async function getSkillProgress({ context }: { context: Context }) {
   const { user } = context;
@@ -10,34 +18,23 @@ export async function getSkillProgress({ context }: { context: Context }) {
     throw new ORPCError("UNAUTHORIZED");
   }
 
-  const completedInterviews = await db.interview.findMany({
-    where: { userId: user.id, status: INTERVIEW_STATUS.COMPLETED },
-    include: { report: { select: { categoryScores: true } } },
-  });
+  const rows = await db.$queryRaw<SkillProgressResult[]>`
+    SELECT 
+      ROUND(AVG((r."categoryScores"->>'communication')::numeric))::int AS "communication",
+      ROUND(AVG((r."categoryScores"->>'problemSolving')::numeric))::int AS "problemSolving",
+      ROUND(AVG((r."categoryScores"->>'technicalKnowledge')::numeric))::int AS "technicalKnowledge",
+      ROUND(AVG((r."categoryScores"->>'codeQuality')::numeric))::int AS "codeQuality",
+      ROUND(AVG((r."categoryScores"->>'timeManagement')::numeric))::int AS "timeManagement",
+      COUNT(*)::int AS "count"
+    FROM "report" r
+    JOIN "interview" i ON r."interviewId" = i."id"
+    WHERE i."userId" = ${user.id}
+      AND i."status" = 'COMPLETED'
+      AND r."categoryScores" IS NOT NULL;
+  `;
 
-  // Aggregate category scores
-  const totals = {
-    communication: 0,
-    problemSolving: 0,
-    technicalKnowledge: 0,
-    codeQuality: 0,
-    timeManagement: 0,
-  };
-  let count = 0;
-
-  for (const interview of completedInterviews) {
-    if (interview.report?.categoryScores) {
-      const scores = interview.report.categoryScores as CategoryScores;
-      totals.communication += scores.communication;
-      totals.problemSolving += scores.problemSolving;
-      totals.technicalKnowledge += scores.technicalKnowledge;
-      totals.codeQuality += scores.codeQuality;
-      totals.timeManagement += scores.timeManagement;
-      count++;
-    }
-  }
-
-  if (count === 0) {
+  const data = rows[0];
+  if (!data || !data.count || Number(data.count) === 0) {
     return { skills: [] };
   }
 
@@ -45,23 +42,23 @@ export async function getSkillProgress({ context }: { context: Context }) {
     skills: [
       {
         name: "Communication",
-        value: Math.round(totals.communication / count),
+        value: Number(data.communication ?? 0),
       },
       {
         name: "Problem Solving",
-        value: Math.round(totals.problemSolving / count),
+        value: Number(data.problemSolving ?? 0),
       },
       {
         name: "Technical Knowledge",
-        value: Math.round(totals.technicalKnowledge / count),
+        value: Number(data.technicalKnowledge ?? 0),
       },
       {
         name: "Code Quality",
-        value: Math.round(totals.codeQuality / count),
+        value: Number(data.codeQuality ?? 0),
       },
       {
         name: "Time Management",
-        value: Math.round(totals.timeManagement / count),
+        value: Number(data.timeManagement ?? 0),
       },
     ],
   };
