@@ -183,7 +183,7 @@ export function Navbar() {
                 <div className="space-y-3">
                   <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-muted/30 p-2.5">
                     <Avatar className="size-9">
-                      <AvatarImage src={session.user.image || ""} />
+                      <AvatarImage src={session.user.image || undefined} />
                       <AvatarFallback className="text-xs uppercase">
                         {session.user.name?.slice(0, 2) || "U"}
                       </AvatarFallback>

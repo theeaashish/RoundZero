@@ -6,16 +6,6 @@ export const DEFAULT_GREETING =
 export const INITIAL_USER_PROMPT =
   "I am ready to start the interview. Please introduce yourself and ask the first question.";
 
-export const cleanTextForTTS = (text: string): string => {
-  return text
-    .replace(/\*\*/g, "")
-    .replace(/\*/g, "")
-    .replace(/`/g, "")
-    .replace(/#/g, "")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .trim();
-};
-
 // Convert database messages to AI message format
 export const toAIMessages = (
   messages: Array<{

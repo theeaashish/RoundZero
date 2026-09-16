@@ -1,6 +1,14 @@
 import { after } from "next/server";
 import { z } from "zod";
+import {
+  encodeSseEvent,
+  STREAM_EVENT,
+  type StreamEventData,
+  type StreamEventName,
+} from "@/lib/interview-stream-protocol";
 import db from "@/lib/prisma";
+import { createSemaphore } from "@/lib/semaphore";
+import { SentenceChunker } from "@/lib/sentence-chunker";
 import { os_context } from "@/server/orpc";
 import { INTERVIEW_STATUS } from "@/server/routers/interview/schemas";
 import {
@@ -11,7 +19,6 @@ import {
   listInterviewMessages,
   mergeInterviewHistory,
   persistMp3ArchiveAsync,
-  SentenceChunker,
   streamInterviewReply,
   streamOpeningInterviewReply,
   synthesizeMp3Chunk,
@@ -163,6 +170,7 @@ export async function POST(request: Request) {
       where: {
         id: interview.id,
         status: INTERVIEW_STATUS.IN_PROGRESS,
+        activeTurnId: null,
       },
       data: { activeTurnId: input.turnId },
     });
@@ -170,7 +178,10 @@ export async function POST(request: Request) {
     if (activeInterview.count === 0) {
       return Response.json(
         {
-          error: "Interview is no longer in progress",
+          error:
+            interview.status === INTERVIEW_STATUS.IN_PROGRESS
+              ? "A response is already in progress. Please wait for it to finish."
+              : "Interview is no longer in progress",
         },
         { status: 409 },
       );
@@ -220,14 +231,13 @@ export async function POST(request: Request) {
     async start(controller) {
       let turnCompleted = false;
 
-      const sendEvent = (event: string, data: Record<string, unknown>) => {
+      const sendEvent = <K extends StreamEventName>(
+        event: K,
+        data: StreamEventData<K>,
+      ) => {
         if (signal.aborted) return;
         try {
-          controller.enqueue(
-            encoder.encode(
-              `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`,
-            ),
-          );
+          controller.enqueue(encoder.encode(encodeSseEvent(event, data)));
         } catch {
           // Client disconnected before the abort signal fired; the stream is
           // being torn down, so there is nothing more to send.
@@ -236,7 +246,7 @@ export async function POST(request: Request) {
 
       try {
         if (userMessage) {
-          sendEvent("user-message", {
+          sendEvent(STREAM_EVENT.UserMessage, {
             turnId: input.turnId,
             persistedId: userMessage.id,
             createdAt: userMessage.createdAt.toISOString(),
@@ -248,6 +258,7 @@ export async function POST(request: Request) {
           : streamInterviewReply(interview, mergedHistory);
         const chunker = new SentenceChunker();
         const completedChunks = new Map<number, SynthesizedChunk>();
+        const ttsSlots = createSemaphore(MAX_TTS_CONCURRENCY);
         const allAudioChunks: Buffer[] = [];
         const ttsTasks: Promise<void>[] = [];
 
@@ -255,58 +266,6 @@ export async function POST(request: Request) {
         let sourceChunkIndex = 0;
         let nextSourceIndex = 0;
         let nextPlaybackIndex = 0;
-
-        // Bounded TTS pool: parallel enough for low latency, capped so long
-        // replies don't burst Deepgram with dozens of simultaneous requests.
-        let inFlightTts = 0;
-        const ttsWaiters: (() => void)[] = [];
-
-        const acquireTtsSlot = async (
-          ttsSignal: AbortSignal,
-        ): Promise<void> => {
-          if (ttsSignal.aborted) {
-            throw new DOMException("Aborted", "AbortError");
-          }
-
-          if (inFlightTts < MAX_TTS_CONCURRENCY) {
-            inFlightTts += 1;
-            return;
-          }
-
-          await new Promise<void>((resolve, reject) => {
-            let settled = false;
-
-            const onAbort = () => {
-              if (settled) return;
-              settled = true;
-              ttsSignal.removeEventListener("abort", onAbort);
-              const idx = ttsWaiters.indexOf(waiter);
-              if (idx !== -1) {
-                ttsWaiters.splice(idx, 1);
-              }
-              reject(new DOMException("Aborted", "AbortError"));
-            };
-
-            const waiter = () => {
-              if (settled) return;
-              settled = true;
-              ttsSignal.removeEventListener("abort", onAbort);
-              inFlightTts += 1;
-              resolve();
-            };
-
-            ttsSignal.addEventListener("abort", onAbort, { once: true });
-            ttsWaiters.push(waiter);
-          });
-        };
-
-        const releaseTtsSlot = () => {
-          inFlightTts -= 1;
-          const nextWaiter = ttsWaiters.shift();
-          if (nextWaiter) {
-            nextWaiter();
-          }
-        };
 
         const emitReadyChunks = () => {
           while (completedChunks.has(nextSourceIndex) && !signal.aborted) {
@@ -317,7 +276,7 @@ export async function POST(request: Request) {
             if (!chunk || chunk.pcmBuffer.length === 0) continue;
 
             allAudioChunks.push(chunk.pcmBuffer);
-            sendEvent("audio-chunk", {
+            sendEvent(STREAM_EVENT.AudioChunk, {
               turnId: input.turnId,
               chunkIndex: nextPlaybackIndex,
               audioBase64: chunk.pcmBuffer.toString("base64"),
@@ -333,20 +292,19 @@ export async function POST(request: Request) {
           const currentSourceIndex = sourceChunkIndex;
           sourceChunkIndex += 1;
 
-          let slotAcquired = false;
-
-          const task = acquireTtsSlot(signal)
-            .then(async () => {
-              slotAcquired = true;
+          const task = (async () => {
+            await ttsSlots.acquire(signal);
+            try {
               const timeoutSignal = AbortSignal.timeout(TTS_CHUNK_TIMEOUT_MS);
               const combinedSignal = AbortSignal.any([signal, timeoutSignal]);
-              return synthesizeMp3Chunk(chunkText, { signal: combinedSignal });
-            })
+              return await synthesizeMp3Chunk(chunkText, {
+                signal: combinedSignal,
+              });
+            } finally {
+              ttsSlots.release();
+            }
+          })()
             .then((pcmBuffer) => {
-              if (slotAcquired) {
-                releaseTtsSlot();
-                slotAcquired = false;
-              }
               if (signal.aborted) return;
               completedChunks.set(currentSourceIndex, {
                 sourceIndex: currentSourceIndex,
@@ -356,16 +314,12 @@ export async function POST(request: Request) {
               emitReadyChunks();
             })
             .catch((error) => {
-              if (slotAcquired) {
-                releaseTtsSlot();
-                slotAcquired = false;
-              }
               if (signal.aborted) return;
               console.error("[TTS Synthesis Error]", {
                 chunkIndex: currentSourceIndex,
                 error,
               });
-              sendEvent("audio-error", {
+              sendEvent(STREAM_EVENT.AudioError, {
                 turnId: input.turnId,
                 chunkIndex: currentSourceIndex,
               });
@@ -398,7 +352,10 @@ export async function POST(request: Request) {
           }
 
           fullAssistantReply += token;
-          sendEvent("text-delta", { turnId: input.turnId, text: token });
+          sendEvent(STREAM_EVENT.TextDelta, {
+            turnId: input.turnId,
+            text: token,
+          });
 
           for (const chunk of chunker.processDelta(token)) {
             handleSentenceChunk(chunk);
@@ -416,14 +373,16 @@ export async function POST(request: Request) {
         if (signal.aborted) return;
 
         emitReadyChunks();
-        sendEvent("audio-complete", {
+        sendEvent(STREAM_EVENT.AudioComplete, {
           turnId: input.turnId,
           chunkCount: nextPlaybackIndex,
         });
 
-        const trimmedReply = fullAssistantReply.trim();
+        const trimmedReply = fullAssistantReply
+          .replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, "")
+          .trim();
         if (!trimmedReply) {
-          sendEvent("error", {
+          sendEvent(STREAM_EVENT.Error, {
             turnId: input.turnId,
             message:
               "The interviewer returned an empty response. Please try again.",
@@ -438,7 +397,7 @@ export async function POST(request: Request) {
         });
 
         if (!assistantMessage) {
-          sendEvent("error", {
+          sendEvent(STREAM_EVENT.Error, {
             turnId: input.turnId,
             message: "The interview ended before this response completed.",
           });
@@ -448,7 +407,7 @@ export async function POST(request: Request) {
         turnCompleted = true;
         if (signal.aborted) return;
 
-        sendEvent("message-complete", {
+        sendEvent(STREAM_EVENT.MessageComplete, {
           turnId: input.turnId,
           persistedId: assistantMessage.id,
           createdAt: assistantMessage.createdAt.toISOString(),
@@ -472,7 +431,7 @@ export async function POST(request: Request) {
       } catch (error) {
         if (!signal.aborted) {
           console.error("[Interview Chat SSE Stream Error]", error);
-          sendEvent("error", {
+          sendEvent(STREAM_EVENT.Error, {
             turnId: input.turnId,
             message:
               "I ran into an issue generating the next response. Please try again.",

@@ -1,4 +1,5 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createGroq } from "@ai-sdk/groq";
 import { ORPCError } from "@orpc/client";
 import {
   generateObject,
@@ -13,14 +14,25 @@ import {
   architectureEvaluationSchema,
 } from "./architecture-evaluation";
 
-// Initialize Google AI client
+// Initialize Groq AI client (used for low-latency live interview conversations)
+const groq = createGroq({
+  apiKey: env.GROQ_API_KEY,
+});
+
+// Initialize Google Gemini client (used for reports, system design problems, and architecture evaluations)
 const google = createGoogleGenerativeAI({
   apiKey: env.GEMINI_API_KEY,
 });
 
-// Model configuration
-const MODEL_ID = "gemini-3.1-flash-lite-preview";
-export const model = google(MODEL_ID);
+// Model configurations
+export const GROQ_INTERVIEW_MODEL_ID = "openai/gpt-oss-20b";
+export const GEMINI_MODEL_ID = "gemini-3.1-flash-lite-preview";
+
+export const interviewModel = groq(GROQ_INTERVIEW_MODEL_ID);
+export const geminiModel = google(GEMINI_MODEL_ID);
+
+// Default model export for general tasks (architecture evaluation, reports, etc.)
+export const model = geminiModel;
 
 // Temperature settings for different use cases
 export const TEMPERATURE = {
@@ -55,44 +67,53 @@ export type CategoryScores = Report["categoryScores"];
 // Message type for AI conversations
 export type AIMessage = ModelMessage;
 
-// Generate a single interview response
+// Provider options to suppress internal reasoning tokens from streaming to the user/TTS
+const GROQ_PROVIDER_OPTIONS = {
+  groq: {
+    reasoningFormat: "hidden" as const,
+  },
+};
+
+// Generate a single interview response (Groq for ultra-low latency)
 export const generateInterviewResponse = async (
   systemPrompt: string,
   messages: AIMessage[],
   temperature: number = TEMPERATURE.CONVERSATIONAL,
 ): Promise<string> => {
   const { text } = await generateText({
-    model,
+    model: interviewModel,
     system: systemPrompt,
     messages,
     temperature,
+    providerOptions: GROQ_PROVIDER_OPTIONS,
   });
 
   return text;
 };
 
-// Stream an interview response for lower perceived latency
+// Stream an interview response for lower perceived latency (Groq)
 export const streamInterviewResponse = (
   systemPrompt: string,
   messages: AIMessage[],
   temperature: number = TEMPERATURE.CONVERSATIONAL,
 ) => {
   return streamText({
-    model,
+    model: interviewModel,
     system: systemPrompt,
     messages,
     temperature,
+    providerOptions: GROQ_PROVIDER_OPTIONS,
   });
 };
 
-// Generate a structured interview report
+// Generate a structured interview report (Gemini for structured precision)
 export const generateReport = async (
   systemPrompt: string,
   messages: AIMessage[],
   temperature: number = TEMPERATURE.PRECISE,
 ): Promise<Report> => {
   const { object } = await generateObject({
-    model,
+    model: geminiModel,
     system: systemPrompt,
     messages,
     schema: reportSchema,
@@ -203,7 +224,7 @@ Requirements:
   const prompt = `# Challenge Configuration\n${promptDetails}\n\nReturn a structured output matching the schema exactly.`;
 
   const { object } = await generateObject({
-    model,
+    model: geminiModel,
     system: systemPrompt,
     prompt,
     schema: systemDesignProblemSchema,
@@ -301,7 +322,7 @@ Respond with ONLY a valid JSON object matching the schema described in the syste
 
   try {
     const { object } = await generateObject({
-      model,
+      model: geminiModel,
       system: systemPrompt,
       prompt: userPrompt,
       schema: architectureEvaluationSchema,

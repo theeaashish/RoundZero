@@ -64,7 +64,7 @@ function StatusIcon({ status }: { status: boolean | string }) {
 export function Comparison() {
   return (
     <section className="py-20 lg:py-28">
-      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Section header */}
         <motion.div
           className="max-w-2xl"

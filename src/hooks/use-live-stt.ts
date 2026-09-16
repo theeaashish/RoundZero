@@ -1,14 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  assertMicAvailable,
-  buildDeepgramParams,
-  getSupportedMimeType,
-  isMicError,
-  sleep,
-} from "@/lib/live-stt-utils";
-import { orpcClient } from "@/lib/orpc-client";
+import { DeepgramSession } from "@/lib/live-stt/deepgram-session";
+import { UtteranceAssembler } from "@/lib/live-stt/utterance-assembler";
+import { assertMicAvailable, sleep } from "@/lib/live-stt-utils";
+import { isMicError } from "@/lib/mic-errors";
 
 export type ConnectionState =
   | "disconnected"
@@ -36,186 +32,53 @@ export interface LiveSTTState {
   resumeMic: () => void;
 }
 
-const DEEPGRAM_WSS_BASE = "wss://api.deepgram.com/v1/listen";
 const DEFAULT_DEADMAN_TIMEOUT_MS = 1500;
-const RECORDER_TIMESLICE_MS = 100;
-const CONNECTION_TIMEOUT_MS = 10_000;
-const KEEP_ALIVE_INTERVAL_MS = 8000;
-
 const MAX_RECONNECT_ATTEMPTS = 3;
 const RECONNECT_BASE_DELAY_MS = 1000;
 // Dev servers cold-start RPC routes and networks blip — one quiet retry on
 // token/socket acquisition stops first-attempt flakiness from killing sessions.
 const TRANSIENT_RETRY_DELAY_MS = 1200;
 
-const AUDIO_CONSTRAINTS: MediaTrackConstraints = {
-  echoCancellation: true,
-  noiseSuppression: true,
-  autoGainControl: true,
-};
-
-async function acquireMicAndToken(): Promise<{
-  apiKey: string;
-  stream: MediaStream;
-}> {
-  // Start both concurrently, but make sure a late token failure never leaks
-  // the already-acquired mic stream.
-  const tokenPromise = orpcClient.media.deepgramToken({});
-
-  let stream: MediaStream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: AUDIO_CONSTRAINTS,
-    });
-  } catch (error) {
-    void tokenPromise.catch(() => {});
-    throw error;
-  }
-
-  try {
-    const { apiKey } = await tokenPromise;
-    return { apiKey, stream };
-  } catch (error) {
-    stream.getTracks().forEach((track) => {
-      track.stop();
-    });
-    throw error;
-  }
-}
-
 export const useLiveSTT = (options: LiveSTTOptions = {}): LiveSTTState => {
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("disconnected");
   const [isRecording, setIsRecording] = useState(false);
-
-  const wsRef = useRef<WebSocket | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const keepAliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const deadmanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const connectionGenerationRef = useRef(0);
-  const connectAttemptRef = useRef<Promise<void> | null>(null);
-  const reconnectAttemptsRef = useRef(0);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const assembledTranscriptRef = useRef("");
-  const utterancePreviewRef = useRef("");
-  const isSpeakingRef = useRef(false);
-  const speechStartNotifiedRef = useRef(false);
-  const isRecordingRef = useRef(false);
-  const hasEverConnectedRef = useRef(false);
-  const userDisconnectRequestedRef = useRef(false);
-  const connectRef = useRef<() => Promise<void>>(async () => {});
 
   const optionsRef = useRef(options);
   useEffect(() => {
     optionsRef.current = options;
   }, [options]);
 
-  const resetUtterance = useCallback(() => {
-    assembledTranscriptRef.current = "";
-    utterancePreviewRef.current = "";
-    isSpeakingRef.current = false;
-    speechStartNotifiedRef.current = false;
-  }, []);
+  const sessionRef = useRef<DeepgramSession | null>(null);
+  const assemblerRef = useRef<UtteranceAssembler | null>(null);
+  const isRecordingRef = useRef(false);
+  const hasEverConnectedRef = useRef(false);
+  const userDisconnectRequestedRef = useRef(false);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectAttemptRef = useRef<Promise<void> | null>(null);
+  // Forward reference: scheduleReconnect must trigger connect() which is
+  // declared later. This is the only intentional indirection left.
+  const connectRef = useRef<() => Promise<void>>(async () => {});
 
-  const finalizeCurrentUtterance = useCallback(() => {
-    if (deadmanTimeoutRef.current) {
-      clearTimeout(deadmanTimeoutRef.current);
-      deadmanTimeoutRef.current = null;
-    }
+  const finalizeCurrentUtterance = useCallback(
+    () => assemblerRef.current?.finalize() ?? "",
+    [],
+  );
 
-    const assembled = (
-      utterancePreviewRef.current || assembledTranscriptRef.current
-    ).trim();
-    resetUtterance();
-
-    if (assembled) {
-      optionsRef.current.onUtteranceEnd?.(assembled);
-    }
-
-    return assembled;
-  }, [resetUtterance]);
-
-  const resetDeadmanTimeout = useCallback(() => {
-    if (deadmanTimeoutRef.current) {
-      clearTimeout(deadmanTimeoutRef.current);
-    }
-    deadmanTimeoutRef.current = setTimeout(
-      finalizeCurrentUtterance,
-      optionsRef.current.utteranceTimeoutMs ?? DEFAULT_DEADMAN_TIMEOUT_MS,
-    );
-  }, [finalizeCurrentUtterance]);
-
-  const cleanup = useCallback(() => {
-    connectionGenerationRef.current += 1;
-
-    if (keepAliveRef.current) {
-      clearInterval(keepAliveRef.current);
-    }
-    if (deadmanTimeoutRef.current) {
-      clearTimeout(deadmanTimeoutRef.current);
-    }
+  const disposeActiveSession = useCallback(() => {
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
     }
-
-    const mediaRecorder = mediaRecorderRef.current;
-    mediaRecorderRef.current = null;
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-      mediaRecorder.ondataavailable = null;
-      mediaRecorder.stop();
-    }
-
-    const stream = streamRef.current;
-    streamRef.current = null;
-    stream?.getTracks().forEach((track) => {
-      track.stop();
-    });
-
-    const ws = wsRef.current;
-    wsRef.current = null;
-    if (ws) {
-      ws.onopen = null;
-      ws.onmessage = null;
-      ws.onerror = null;
-      ws.onclose = null;
-      if (
-        ws.readyState === WebSocket.OPEN ||
-        ws.readyState === WebSocket.CONNECTING
-      ) {
-        ws.close();
-      }
-    }
-
-    keepAliveRef.current = null;
-    deadmanTimeoutRef.current = null;
-    isRecordingRef.current = false;
-    setIsRecording(false);
-    resetUtterance();
-  }, [resetUtterance]);
-
-  const pauseMic = useCallback(() => {
-    streamRef.current?.getAudioTracks().forEach((track) => {
-      track.enabled = false;
-    });
+    sessionRef.current?.dispose();
+    sessionRef.current = null;
+    assemblerRef.current?.dispose();
+    assemblerRef.current = null;
     isRecordingRef.current = false;
     setIsRecording(false);
   }, []);
 
-  const resumeMic = useCallback(() => {
-    streamRef.current?.getAudioTracks().forEach((track) => {
-      track.enabled = true;
-    });
-    isRecordingRef.current = Boolean(streamRef.current);
-    resetUtterance();
-    setIsRecording(Boolean(streamRef.current));
-  }, [resetUtterance]);
-
-  // Exponential-backoff retry for unexpected drops. Only used once a session
-  // has connected successfully; initial failures surface as "failed" so the
-  // user can act (e.g. grant mic permission).
   const scheduleReconnect = useCallback(() => {
     if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
       setConnectionState("failed");
@@ -232,214 +95,79 @@ export const useLiveSTT = (options: LiveSTTOptions = {}): LiveSTTState => {
     }, delay);
   }, []);
 
-  const runConnectAttempt = useCallback(async () => {
-    const generation = connectionGenerationRef.current + 1;
-    connectionGenerationRef.current = generation;
+  const handleUnexpectedClose = useCallback(() => {
+    // Read intent BEFORE teardown clears isRecordingRef — ordering matters.
+    const shouldReconnect =
+      hasEverConnectedRef.current && isRecordingRef.current;
+    finalizeCurrentUtterance();
+    disposeActiveSession();
+    if (shouldReconnect) {
+      scheduleReconnect();
+    } else {
+      setConnectionState("disconnected");
+    }
+  }, [finalizeCurrentUtterance, disposeActiveSession, scheduleReconnect]);
+
+  const establishSession = useCallback(async () => {
+    userDisconnectRequestedRef.current = false;
+    assertMicAvailable();
     setConnectionState("connecting");
 
+    const assembler = new UtteranceAssembler(
+      optionsRef.current.utteranceTimeoutMs ?? DEFAULT_DEADMAN_TIMEOUT_MS,
+      {
+        onSpeechStart: () => optionsRef.current.onSpeechStarted?.(),
+        onInterim: (text) => optionsRef.current.onInterimTranscript?.(text),
+        onFinal: (text) => optionsRef.current.onFinalTranscript?.(text),
+        onEnd: (text) => optionsRef.current.onUtteranceEnd?.(text),
+      },
+    );
+
+    let session: DeepgramSession;
     try {
-      userDisconnectRequestedRef.current = false;
-      assertMicAvailable();
-
-      // Token minting and mic permission run concurrently for a faster start.
-      const { apiKey, stream } = await acquireMicAndToken();
-
-      if (connectionGenerationRef.current !== generation) {
-        stream.getTracks().forEach((track) => {
-          track.stop();
-        });
-        return;
-      }
-      streamRef.current = stream;
-
-      wsRef.current = new WebSocket(
-        `${DEEPGRAM_WSS_BASE}?${buildDeepgramParams(optionsRef.current.keyterms)}`,
-        ["token", apiKey],
-      );
-      const ws = wsRef.current;
-
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error("Deepgram connection timed out"));
-        }, CONNECTION_TIMEOUT_MS);
-
-        ws.onopen = () => {
-          clearTimeout(timeout);
-          resolve();
-        };
-        // A `close` event always follows an error and carries the close code,
-        // so all rejection detail is surfaced from there.
-        ws.onerror = () => {};
-        ws.onclose = (event) => {
-          clearTimeout(timeout);
-          reject(
-            new Error(
-              `Deepgram handshake failed (code ${event.code}${event.reason ? `: ${event.reason}` : ""})`,
-            ),
-          );
-        };
+      session = await DeepgramSession.connect({
+        keyterms: optionsRef.current.keyterms,
+        assembler,
+        handlers: { onUnexpectedClose: handleUnexpectedClose },
       });
-
-      if (
-        connectionGenerationRef.current !== generation ||
-        wsRef.current !== ws
-      ) {
-        return;
-      }
-      if (ws.readyState !== WebSocket.OPEN) {
-        throw new Error("Deepgram closed during connection setup");
-      }
-
-      ws.onmessage = (event) => {
-        if (
-          connectionGenerationRef.current !== generation ||
-          wsRef.current !== ws
-        ) {
-          return;
-        }
-
-        try {
-          const data = JSON.parse(event.data);
-
-          if (data.type === "SpeechStarted") {
-            isSpeakingRef.current = true;
-            if (!speechStartNotifiedRef.current) {
-              speechStartNotifiedRef.current = true;
-              optionsRef.current.onSpeechStarted?.();
-            }
-            return;
-          }
-
-          if (data.type === "UtteranceEnd") {
-            if (assembledTranscriptRef.current.trim()) {
-              finalizeCurrentUtterance();
-            } else {
-              resetUtterance();
-            }
-            return;
-          }
-
-          if (data.type !== "Results" || !data.channel?.alternatives?.[0]) {
-            return;
-          }
-
-          const transcript = data.channel.alternatives[0].transcript;
-          if (!transcript) return;
-
-          isSpeakingRef.current = true;
-          if (!speechStartNotifiedRef.current) {
-            speechStartNotifiedRef.current = true;
-            optionsRef.current.onSpeechStarted?.();
-          }
-
-          if (data.is_final) {
-            assembledTranscriptRef.current =
-              `${assembledTranscriptRef.current} ${transcript}`.trim();
-            utterancePreviewRef.current = assembledTranscriptRef.current;
-            optionsRef.current.onFinalTranscript?.(utterancePreviewRef.current);
-
-            if (data.speech_final) {
-              finalizeCurrentUtterance();
-              return;
-            }
-          } else {
-            const interim =
-              `${assembledTranscriptRef.current} ${transcript}`.trim();
-            utterancePreviewRef.current = interim;
-            optionsRef.current.onInterimTranscript?.(interim);
-          }
-
-          resetDeadmanTimeout();
-        } catch (error) {
-          console.error("[LiveSTT] Failed to parse message:", error);
-        }
-      };
-
-      // Unexpected drop: salvage the partial utterance, tear down, and retry
-      // with backoff while the user was actively recording. The error handler
-      // is a no-op because a `close` event always follows and owns teardown.
-      ws.onclose = () => {
-        if (
-          connectionGenerationRef.current !== generation ||
-          wsRef.current !== ws
-        ) {
-          return;
-        }
-        const shouldReconnect =
-          hasEverConnectedRef.current && isRecordingRef.current;
-
-        finalizeCurrentUtterance();
-        cleanup();
-
-        if (shouldReconnect) {
-          scheduleReconnect();
-        } else {
-          setConnectionState("disconnected");
-        }
-      };
-      ws.onerror = () => {};
-
-      const mimeType = getSupportedMimeType();
-      const mediaRecorder = new MediaRecorder(
-        stream,
-        mimeType ? { mimeType } : undefined,
-      );
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.ondataavailable = (event) => {
-        if (
-          connectionGenerationRef.current === generation &&
-          wsRef.current === ws &&
-          event.data.size > 0 &&
-          ws.readyState === WebSocket.OPEN
-        ) {
-          ws.send(event.data);
-        }
-      };
-      mediaRecorder.start(RECORDER_TIMESLICE_MS);
-      isRecordingRef.current = true;
-
-      keepAliveRef.current = setInterval(() => {
-        if (
-          connectionGenerationRef.current === generation &&
-          wsRef.current === ws &&
-          ws.readyState === WebSocket.OPEN
-        ) {
-          ws.send(JSON.stringify({ type: "KeepAlive" }));
-        }
-      }, KEEP_ALIVE_INTERVAL_MS);
-
-      hasEverConnectedRef.current = true;
-      reconnectAttemptsRef.current = 0;
-      setConnectionState("connected");
-      setIsRecording(true);
     } catch (error) {
-      if (connectionGenerationRef.current === generation) {
-        cleanup();
-        if (hasEverConnectedRef.current) {
-          scheduleReconnect();
-        } else {
-          setConnectionState("failed");
-        }
+      assembler.dispose();
+      if (userDisconnectRequestedRef.current) {
+        setConnectionState("disconnected");
+      } else if (hasEverConnectedRef.current && !isMicError(error)) {
+        scheduleReconnect();
+      } else {
+        setConnectionState("failed");
       }
       throw error;
     }
-  }, [
-    cleanup,
-    finalizeCurrentUtterance,
-    resetDeadmanTimeout,
-    scheduleReconnect,
-    resetUtterance,
-  ]);
+
+    // A disconnect raced the handshake — throw the fresh session away.
+    if (userDisconnectRequestedRef.current) {
+      session.dispose();
+      setConnectionState("disconnected");
+      return;
+    }
+
+    sessionRef.current = session;
+    assemblerRef.current = assembler;
+    isRecordingRef.current = true;
+    hasEverConnectedRef.current = true;
+    reconnectAttemptsRef.current = 0;
+    setConnectionState("connected");
+    setIsRecording(true);
+  }, [handleUnexpectedClose, scheduleReconnect]);
 
   const connect = useCallback(async () => {
     if (connectAttemptRef.current) {
       return connectAttemptRef.current;
     }
-    if (wsRef.current) return;
+    if (sessionRef.current) return;
 
-    const attempt = (async () => {
+    let attempt: Promise<void> | null = null;
+    attempt = (async () => {
       try {
-        await runConnectAttempt();
+        await establishSession();
       } catch (error) {
         // Established sessions already have the backoff reconnect cycle; this
         // single retry only rescues cold-start flakiness on first connect.
@@ -459,14 +187,14 @@ export const useLiveSTT = (options: LiveSTTOptions = {}): LiveSTTState => {
         await sleep(TRANSIENT_RETRY_DELAY_MS);
 
         if (
-          wsRef.current ||
+          sessionRef.current ||
           userDisconnectRequestedRef.current ||
-          connectAttemptRef.current
+          connectAttemptRef.current !== attempt
         ) {
           return;
         }
 
-        await runConnectAttempt();
+        await establishSession();
       }
     })();
 
@@ -478,7 +206,7 @@ export const useLiveSTT = (options: LiveSTTOptions = {}): LiveSTTState => {
         connectAttemptRef.current = null;
       }
     }
-  }, [runConnectAttempt]);
+  }, [establishSession]);
 
   useEffect(() => {
     connectRef.current = connect;
@@ -486,19 +214,32 @@ export const useLiveSTT = (options: LiveSTTOptions = {}): LiveSTTState => {
 
   const disconnect = useCallback(() => {
     userDisconnectRequestedRef.current = true;
-    cleanup();
+    disposeActiveSession();
     setConnectionState("disconnected");
-  }, [cleanup]);
+  }, [disposeActiveSession]);
+
+  const pauseMic = useCallback(() => {
+    sessionRef.current?.pause();
+    isRecordingRef.current = false;
+    setIsRecording(false);
+  }, []);
+
+  const resumeMic = useCallback(() => {
+    sessionRef.current?.resume();
+    const hasSession = Boolean(sessionRef.current);
+    assemblerRef.current?.reset();
+    isRecordingRef.current = hasSession;
+    setIsRecording(hasSession);
+  }, []);
 
   useEffect(() => {
     return () => {
-      const ws = wsRef.current;
-      if (ws) {
-        ws.close();
-      }
-      cleanup();
+      // Flag any in-flight connect attempt so it discards its fresh session
+      // instead of adopting it after unmount.
+      userDisconnectRequestedRef.current = true;
+      disposeActiveSession();
     };
-  }, [cleanup]);
+  }, [disposeActiveSession]);
 
   return {
     connectionState,

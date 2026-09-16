@@ -32,7 +32,7 @@ export function UserMenu() {
         >
           <Avatar className="size-8 border border-border/50">
             <AvatarImage
-              src={session.user.image || ""}
+              src={session.user.image || undefined}
               alt={session.user.name || "User"}
             />
             <AvatarFallback className="text-[11px] font-medium uppercase">

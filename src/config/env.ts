@@ -12,6 +12,7 @@ export const env = createEnv({
     GOOGLE_CLIENT_SECRET: z.string().min(1),
     DEEPGRAM_API_KEY: z.string().min(1),
     DEEPGRAM_PROJECT_ID: z.string().min(1),
+    GROQ_API_KEY: z.string().min(1),
     GEMINI_API_KEY: z.string().min(1),
     S3_BUCKET_NAME: z.string().min(1),
     S3_ENDPOINT: z.url().default("https://t3.storage.dev"),

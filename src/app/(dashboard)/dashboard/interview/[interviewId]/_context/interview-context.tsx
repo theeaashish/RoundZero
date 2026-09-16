@@ -13,7 +13,13 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
+import type { ConnectionState } from "@/hooks/use-live-stt";
+import {
+  parseStreamEvent,
+  STREAM_EVENT,
+} from "@/lib/interview-stream-protocol";
 import { orpc } from "@/lib/orpc-client";
+import { readSseStream } from "@/lib/sse";
 import type { INTERVIEW_STATUS } from "@/server/routers/interview/schemas";
 import { useInterviewMedia } from "../_hooks/use-interview-media";
 import type { InterviewData, Message } from "./types";
@@ -45,7 +51,7 @@ export interface InterviewContextType {
   stopAllMedia: () => void;
   transcript: string;
   interimTranscript: string;
-  connectionState: "disconnected" | "connecting" | "connected" | "failed";
+  connectionState: ConnectionState;
 }
 
 const InterviewContext = createContext<InterviewContextType | null>(null);
@@ -193,7 +199,6 @@ export const InterviewContextProvider = ({
     connectSTT,
     stopAllMedia,
   } = useInterviewMedia({
-    isAssistantResponding: isResponding,
     sttKeyterms,
     onBargeIn: handleBargeIn,
     onUtteranceDispatched: (finalizedText) => {
@@ -386,99 +391,75 @@ export const InterviewContextProvider = ({
           throw new Error(errorMessage);
         }
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let sseBuffer = "";
+        streamLoop: for await (const sse of readSseStream(response.body)) {
+          if (activeTurnIdRef.current !== turnId) break;
 
-        streamLoop: while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+          const event = parseStreamEvent(sse.event, sse.data);
+          if (!event) continue;
 
-          sseBuffer += decoder.decode(value, { stream: true });
-          const events = sseBuffer.split("\n\n");
-          sseBuffer = events.pop() ?? "";
-
-          for (const eventBlock of events) {
-            if (!eventBlock.trim()) continue;
-
-            const lines = eventBlock.split("\n");
-            let eventName = "";
-            let dataStr = "";
-
-            for (const line of lines) {
-              if (line.startsWith("event: ")) {
-                eventName = line.slice(7).trim();
-              } else if (line.startsWith("data: ")) {
-                dataStr = line.slice(6).trim();
+          // AudioError is intentionally unhandled here: the audio player already
+          // substitutes silence for a failed chunk and the server logs the failure.
+          switch (event.event) {
+            case STREAM_EVENT.UserMessage: {
+              if (!userTempId) break;
+              userMessagePersisted = true;
+              if (activeUserTempIdRef.current === userTempId) {
+                activeUserTempIdRef.current = null;
               }
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === userTempId
+                    ? {
+                        ...msg,
+                        id: event.persistedId || msg.id,
+                        createdAt: new Date(event.createdAt),
+                      }
+                    : msg,
+                ),
+              );
+              break;
             }
-
-            if (!eventName || !dataStr) continue;
-
-            try {
-              const data = JSON.parse(dataStr);
-
-              // Ignore packets if turn was interrupted
-              if (activeTurnIdRef.current !== turnId) break;
-
-              if (eventName === "user-message" && userTempId) {
-                userMessagePersisted = true;
-                if (activeUserTempIdRef.current === userTempId) {
-                  activeUserTempIdRef.current = null;
-                }
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === userTempId
-                      ? {
-                          ...msg,
-                          id: data.persistedId || msg.id,
-                          createdAt: data.createdAt
-                            ? new Date(data.createdAt)
-                            : msg.createdAt,
-                        }
-                      : msg,
-                  ),
-                );
-              } else if (
-                eventName === "text-delta" &&
-                typeof data.text === "string"
-              ) {
-                pendingDelta += data.text;
-                if (deltaFlushRafId === null) {
-                  deltaFlushRafId = requestAnimationFrame(flushPendingDelta);
-                }
-              } else if (eventName === "audio-chunk" && data.audioBase64) {
-                queueAudioChunk({
-                  chunkIndex: data.chunkIndex,
-                  audioBase64: data.audioBase64,
-                  turnId,
-                });
-              } else if (eventName === "audio-complete") {
-                markAudioComplete(turnId);
-              } else if (eventName === "message-complete") {
-                messageCompleted = true;
-                activeTurnIdRef.current = null;
-                // Server sends the authoritative full content; drop buffered deltas.
-                cancelDeltaFlush();
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantTempId
-                      ? {
-                          ...msg,
-                          id: data.persistedId || msg.id,
-                          content: data.content || msg.content,
-                          isTyping: false,
-                        }
-                      : msg,
-                  ),
-                );
-              } else if (eventName === "error") {
-                streamErrorMessage = data.message || "AI response error";
-                void reader.cancel().catch(() => {});
-                break streamLoop;
+            case STREAM_EVENT.TextDelta: {
+              pendingDelta += event.text;
+              if (deltaFlushRafId === null) {
+                deltaFlushRafId = requestAnimationFrame(flushPendingDelta);
               }
-            } catch (parseError) {
-              console.error("[SSE Parse Error]", parseError);
+              break;
+            }
+            case STREAM_EVENT.AudioChunk: {
+              queueAudioChunk({
+                chunkIndex: event.chunkIndex,
+                audioBase64: event.audioBase64,
+                turnId,
+              });
+              break;
+            }
+            case STREAM_EVENT.AudioComplete: {
+              markAudioComplete(turnId);
+              break;
+            }
+            case STREAM_EVENT.MessageComplete: {
+              messageCompleted = true;
+              activeTurnIdRef.current = null;
+              // Server sends the authoritative full content; drop buffered deltas.
+              cancelDeltaFlush();
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantTempId
+                    ? {
+                        ...msg,
+                        id: event.persistedId || msg.id,
+                        content: event.content || msg.content,
+                        isTyping: false,
+                      }
+                    : msg,
+                ),
+              );
+              break;
+            }
+            case STREAM_EVENT.Error: {
+              streamErrorMessage = event.message || "AI response error";
+              break streamLoop;
             }
           }
         }
@@ -495,7 +476,8 @@ export const InterviewContextProvider = ({
 
         const wasAborted =
           (error as { name?: string })?.name === "AbortError" ||
-          abortController.signal.aborted;
+          abortController.signal.aborted ||
+          activeTurnIdRef.current !== turnId;
 
         setMessages((prev) => prev.filter((msg) => msg.id !== assistantTempId));
 
@@ -511,7 +493,6 @@ export const InterviewContextProvider = ({
             activeUserTempIdRef.current = null;
           }
         }
-        setMessages((prev) => prev.filter((msg) => msg.id !== assistantTempId));
         toast.error(
           userMessagePersisted
             ? "The AI response stream failed."

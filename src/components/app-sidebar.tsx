@@ -260,7 +260,7 @@ export function AppSidebar() {
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton size="lg" className="w-full">
                   <Avatar className="h-7 w-7 shrink-0">
-                    <AvatarImage src={session?.user?.image || ""} />
+                    <AvatarImage src={session?.user?.image || undefined} />
                     <AvatarFallback className="text-xs bg-primary/10 text-primary">
                       {session?.user?.name?.charAt(0) || (
                         <User2 className="h-3 w-3" />

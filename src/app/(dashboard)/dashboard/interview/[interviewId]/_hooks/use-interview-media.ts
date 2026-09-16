@@ -4,9 +4,9 @@ import { type ConnectionState, useLiveSTT } from "@/hooks/use-live-stt";
 import { useStreamingAudioPlayer } from "@/hooks/use-streaming-audio-player";
 import {
   countWords,
-  describeSttError,
   joinTranscriptSegments,
 } from "@/lib/interview-media-utils";
+import { describeMicError } from "@/lib/mic-errors";
 
 export type { ConnectionState };
 
@@ -35,7 +35,6 @@ export interface InterviewMediaState {
 }
 
 export interface InterviewMediaOptions {
-  isAssistantResponding?: boolean;
   onUtteranceDispatched?: (text: string) => void;
   onBargeIn?: () => void;
   /** Domain terms boosted for STT accuracy (e.g. tech stack keywords) */
@@ -53,7 +52,6 @@ export const useInterviewMedia = (
   const [transcript, setTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
 
-  const micEnabledRef = useRef(true);
   const transcriptRef = useRef("");
 
   const optionsRef = useRef(options);
@@ -134,23 +132,14 @@ export const useInterviewMedia = (
     },
   });
 
-  // Shared connect helper to avoid duplicated logic
-  const tryConnect = useCallback(async (): Promise<boolean> => {
+  const connectSTT = useCallback(async (): Promise<void> => {
     try {
       await connect();
-      micEnabledRef.current = true;
-      return true;
     } catch (error) {
       console.error("[Interview Media] STT connection failed:", error);
-      toast.error(describeSttError(error));
-      return false;
+      toast.error(describeMicError(error));
     }
   }, [connect]);
-
-  const connectSTT = useCallback(
-    () => tryConnect().then(() => {}),
-    [tryConnect],
-  );
 
   const toggleMic = useCallback(async () => {
     void prepareAudio().catch((error) => {
@@ -158,23 +147,21 @@ export const useInterviewMedia = (
     });
 
     if (connectionState !== "connected") {
-      await tryConnect();
+      await connectSTT();
       return;
     }
 
     if (isRecording) {
       finalizeCurrentUtterance();
       pauseMic();
-      micEnabledRef.current = false;
     } else {
       resumeMic();
-      micEnabledRef.current = true;
     }
   }, [
     connectionState,
     isRecording,
     prepareAudio,
-    tryConnect,
+    connectSTT,
     finalizeCurrentUtterance,
     pauseMic,
     resumeMic,
@@ -183,7 +170,6 @@ export const useInterviewMedia = (
   const stopAllMedia = useCallback(() => {
     stopAudio();
     disconnect();
-    micEnabledRef.current = false;
   }, [stopAudio, disconnect]);
 
   const clearTranscript = useCallback(() => {
@@ -202,10 +188,9 @@ export const useInterviewMedia = (
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      stopAudio();
-      disconnect();
+      stopAllMedia();
     };
-  }, [stopAudio, disconnect]);
+  }, [stopAllMedia]);
 
   return {
     isPlaying,

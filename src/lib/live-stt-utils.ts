@@ -24,20 +24,6 @@ export function assertMicAvailable(): void {
   }
 }
 
-// Media errors are permanent (user/device problems); everything else — token
-// fetch, socket upgrade — is worth one retry.
-export function isMicError(error: unknown): boolean {
-  const name = (error as { name?: string })?.name ?? "";
-  return [
-    "NotAllowedError",
-    "PermissionDeniedError",
-    "NotFoundError",
-    "DevicesNotFoundError",
-    "OverconstrainedError",
-    "NotReadableError",
-  ].includes(name);
-}
-
 export const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 

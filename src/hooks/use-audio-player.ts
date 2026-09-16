@@ -8,8 +8,7 @@ export interface AudioPlayerState {
   setVolume: (volume: number) => void;
 }
 
-// Hook for playing audio from URLs
-// Wraps useStreamingAudioPlayer for unified Web Audio / legacy playback
+// URL playback facade over useStreamingAudioPlayer (legacy <audio> path).
 export const useAudioPlayer = (): AudioPlayerState => {
   const { isPlaying, playEncodedAudio, stop, volume, setVolume } =
     useStreamingAudioPlayer();

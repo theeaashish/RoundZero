@@ -75,6 +75,18 @@ export const useStreamingAudioPlayer = (): StreamingAudioPlayerState => {
     return { context, gainNode };
   }, [volume]);
 
+  const teardownLegacyAudio = useCallback(() => {
+    const legacyAudio = legacyAudioRef.current;
+    if (legacyAudio) {
+      legacyAudio.onplay = null;
+      legacyAudio.onended = null;
+      legacyAudio.onerror = null;
+      legacyAudio.pause();
+      legacyAudio.removeAttribute("src");
+      legacyAudio.load();
+    }
+  }, []);
+
   const stop = useCallback(() => {
     activeTurnIdRef.current = null;
     pendingChunksRef.current.clear();
@@ -95,18 +107,10 @@ export const useStreamingAudioPlayer = (): StreamingAudioPlayerState => {
     }
 
     legacyPlaybackGenerationRef.current += 1;
-    const legacyAudio = legacyAudioRef.current;
-    if (legacyAudio) {
-      legacyAudio.onplay = null;
-      legacyAudio.onended = null;
-      legacyAudio.onerror = null;
-      legacyAudio.pause();
-      legacyAudio.removeAttribute("src");
-      legacyAudio.load();
-    }
+    teardownLegacyAudio();
 
     setIsPlaying(false);
-  }, []);
+  }, [teardownLegacyAudio]);
 
   const startStreamingTurn = useCallback(
     (turnId: string) => {
@@ -259,14 +263,9 @@ export const useStreamingAudioPlayer = (): StreamingAudioPlayerState => {
     (audioUrl: string) => {
       stop();
 
-      const existingAudio = legacyAudioRef.current;
-      if (existingAudio) {
-        existingAudio.onplay = null;
-        existingAudio.onended = null;
-        existingAudio.onerror = null;
-        existingAudio.pause();
-        existingAudio.src = "";
-      }
+      // stop() above already performs the full legacy teardown; this guard is
+      // intentionally retained.
+      teardownLegacyAudio();
 
       const audio = new Audio(audioUrl);
       legacyAudioRef.current = audio;
@@ -304,7 +303,7 @@ export const useStreamingAudioPlayer = (): StreamingAudioPlayerState => {
         }
       });
     },
-    [stop, volume],
+    [stop, teardownLegacyAudio, volume],
   );
 
   const setVolume = useCallback((nextVolume: number) => {
